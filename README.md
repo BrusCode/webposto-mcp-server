@@ -96,7 +96,7 @@ Este é o método mais simples e recomendado, pois isola todas as dependências.
 
 2.  **Clone o repositório:**
     ```bash
-    git clone https://github.com/BrusCode/helion-cloud.git
+    git clone https://github.com/BrusCode/webposto-mcp-server.git
     cd helion-cloud
     ```
 
@@ -124,7 +124,7 @@ Este método requer a instalação do Python e das dependências manualmente.
 
 2.  **Clone o repositório e navegue até a pasta:**
     ```bash
-    git clone https://github.com/BrusCode/helion-cloud.git
+    git clone https://github.com/BrusCode/webposto-mcp-server.git
     cd helion-cloud
     ```
 
@@ -148,7 +148,7 @@ Este método requer a instalação do Python e das dependências manualmente.
 
 2.  **Clone o repositório:**
     ```powershell
-    git clone https://github.com/BrusCode/helion-cloud.git
+    git clone https://github.com/BrusCode/webposto-mcp-server.git
     cd helion-cloud
     ```
 
