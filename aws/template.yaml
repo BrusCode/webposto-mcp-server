@@ -1,0 +1,153 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  WebPosto MCP Server - Quality Automação
+  Servidor MCP para integração com o sistema WebPosto, deployado como AWS Lambda.
+
+# =============================================================================
+# Parâmetros
+# =============================================================================
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - development
+      - staging
+      - production
+    Description: Ambiente de deploy
+  
+  WebPostoApiKey:
+    Type: String
+    NoEcho: true
+    Description: Chave da API do WebPosto
+  
+  WebPostoUrl:
+    Type: String
+    Default: https://web.qualityautomacao.com.br/INTEGRACAO
+    Description: URL base da API do WebPosto
+
+# =============================================================================
+# Globals
+# =============================================================================
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: python3.11
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        WEBPOSTO_URL: !Ref WebPostoUrl
+        WEBPOSTO_API_KEY: !Ref WebPostoApiKey
+        LOG_LEVEL: INFO
+        POWERTOOLS_SERVICE_NAME: webposto-mcp
+        POWERTOOLS_METRICS_NAMESPACE: WebPostoMCP
+
+# =============================================================================
+# Recursos
+# =============================================================================
+Resources:
+  # ---------------------------------------------------------------------------
+  # Lambda Function
+  # ---------------------------------------------------------------------------
+  WebPostoMCPFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub webposto-mcp-${Environment}
+      Description: Servidor MCP para WebPosto
+      CodeUri: ../
+      Handler: src.lambda_handler.handler
+      
+      # Configurações de VPC (opcional - descomente se necessário)
+      # VpcConfig:
+      #   SecurityGroupIds:
+      #     - !Ref LambdaSecurityGroup
+      #   SubnetIds:
+      #     - !Ref PrivateSubnet1
+      #     - !Ref PrivateSubnet2
+      
+      # Políticas IAM
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:webposto/*
+      
+      # Tags
+      Tags:
+        Project: WebPostoMCP
+        Environment: !Ref Environment
+        ManagedBy: SAM
+      
+      # Event Sources
+      Events:
+        ApiGateway:
+          Type: Api
+          Properties:
+            Path: /mcp
+            Method: POST
+            RestApiId: !Ref WebPostoMCPApi
+
+  # ---------------------------------------------------------------------------
+  # API Gateway
+  # ---------------------------------------------------------------------------
+  WebPostoMCPApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub webposto-mcp-api-${Environment}
+      StageName: !Ref Environment
+      Description: API Gateway para WebPosto MCP Server
+      
+      # CORS
+      Cors:
+        AllowMethods: "'POST, OPTIONS'"
+        AllowHeaders: "'Content-Type, X-API-Key, Authorization'"
+        AllowOrigin: "'*'"
+      
+      # Throttling
+      MethodSettings:
+        - ResourcePath: /*
+          HttpMethod: '*'
+          ThrottlingBurstLimit: 100
+          ThrottlingRateLimit: 50
+
+  # ---------------------------------------------------------------------------
+  # CloudWatch Log Group
+  # ---------------------------------------------------------------------------
+  WebPostoMCPLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/webposto-mcp-${Environment}
+      RetentionInDays: 30
+
+# =============================================================================
+# Outputs
+# =============================================================================
+Outputs:
+  WebPostoMCPFunctionArn:
+    Description: ARN da função Lambda
+    Value: !GetAtt WebPostoMCPFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-FunctionArn
+  
+  WebPostoMCPApiEndpoint:
+    Description: URL do endpoint da API
+    Value: !Sub https://${WebPostoMCPApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/mcp
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiEndpoint
+  
+  WebPostoMCPApiId:
+    Description: ID da API Gateway
+    Value: !Ref WebPostoMCPApi
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiId

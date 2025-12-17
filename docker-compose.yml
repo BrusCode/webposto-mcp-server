@@ -1,0 +1,62 @@
+# =============================================================================
+# WebPosto MCP Server - Docker Compose
+# Quality Automação
+# =============================================================================
+
+version: '3.8'
+
+services:
+  webposto-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: quality-automacao/webposto-mcp:latest
+    container_name: webposto-mcp-server
+    restart: unless-stopped
+    
+    # Variáveis de ambiente
+    environment:
+      - WEBPOSTO_URL=${WEBPOSTO_URL:-https://web.qualityautomacao.com.br/INTEGRACAO}
+      - WEBPOSTO_API_KEY=${WEBPOSTO_API_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    
+    # Arquivo de variáveis de ambiente (alternativa)
+    env_file:
+      - .env
+    
+    # Volumes para persistência de logs (opcional)
+    volumes:
+      - ./logs:/app/logs:rw
+    
+    # Rede
+    networks:
+      - webposto-network
+    
+    # Limites de recursos
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  webposto-network:
+    driver: bridge
+
+# =============================================================================
+# Uso:
+# 1. Copie .env.example para .env e configure suas credenciais
+# 2. Execute: docker-compose up -d
+# 3. Verifique logs: docker-compose logs -f
+# =============================================================================

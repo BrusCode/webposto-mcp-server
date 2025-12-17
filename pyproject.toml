@@ -1,0 +1,117 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "webposto-mcp-server"
+version = "1.0.0"
+description = "Servidor MCP (Model Context Protocol) para integração com o sistema WebPosto - Quality Automação"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Quality Automação", email = "contato@qualityautomacao.com.br"}
+]
+maintainers = [
+    {name = "Quality Automação", email = "contato@qualityautomacao.com.br"}
+]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "webposto",
+    "quality-automacao",
+    "postos-combustivel",
+    "api",
+    "integration"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+    "requests>=2.31.0",
+    "httpx>=0.25.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "typing-extensions>=4.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.5.0",
+    "ruff>=0.1.0",
+]
+aws = [
+    "mangum>=0.17.0",
+    "aws-lambda-powertools>=2.26.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/BrusCode/webposto-mcp-server"
+Documentation = "https://github.com/BrusCode/webposto-mcp-server#readme"
+Repository = "https://github.com/BrusCode/webposto-mcp-server.git"
+Issues = "https://github.com/BrusCode/webposto-mcp-server/issues"
+
+[project.scripts]
+webposto-mcp = "src.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311', 'py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["src"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "N", "D", "UP", "B", "C4", "SIM"]
+ignore = ["D100", "D104"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+addopts = "-v --cov=src --cov-report=term-missing"
