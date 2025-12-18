@@ -7,7 +7,10 @@ Este servidor fornece ferramentas para assistentes de IA interagirem com a API
 do WebPosto, permitindo consultas e operações no sistema de gestão de postos.
 
 Autor: Quality Automação
-Versão: 1.0.0
+Versão: 1.1.0
+
+IMPORTANTE: A autenticação é feita via parâmetro "chave" na query string,
+conforme documentação oficial da API WebPosto.
 """
 
 import asyncio
@@ -33,15 +36,20 @@ logger = logging.getLogger(__name__)
 # CONFIGURAÇÃO DA API
 # =============================================================================
 
-WEBPOSTO_URL = os.getenv('WEBPOSTO_URL', 'https://web.qualityautomacao.com.br/INTEGRACAO')
+# URL base da API (sem /INTEGRACAO - será adicionado nos endpoints)
+WEBPOSTO_BASE_URL = os.getenv('WEBPOSTO_URL', 'https://web.qualityautomacao.com.br')
+
+# Chave de autenticação (passada como parâmetro "chave" na query string)
 API_KEY = os.getenv('WEBPOSTO_API_KEY', '')
+
+# Código da empresa padrão (opcional)
+DEFAULT_EMPRESA_CODIGO = os.getenv('WEBPOSTO_EMPRESA_CODIGO', '')
 
 def get_headers():
     """Retorna os headers para requisições à API."""
     return {
         'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'X-API-Key': API_KEY
+        'Content-Type': 'application/json'
     }
 
 # =============================================================================
@@ -49,11 +57,27 @@ def get_headers():
 # =============================================================================
 
 class WebPostoClient:
-    """Cliente HTTP para comunicação com a API WebPosto."""
+    """
+    Cliente HTTP para comunicação com a API WebPosto.
     
-    def __init__(self, base_url: str = WEBPOSTO_URL):
-        self.base_url = base_url
+    A autenticação é feita via parâmetro "chave" na query string de cada requisição,
+    conforme o padrão da API WebPosto.
+    """
+    
+    def __init__(self, base_url: str = WEBPOSTO_BASE_URL):
+        self.base_url = base_url.rstrip('/')
         self.timeout = 30
+    
+    def _add_auth_param(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Adiciona o parâmetro de autenticação 'chave' aos parâmetros da requisição."""
+        if params is None:
+            params = {}
+        
+        # Adicionar chave de autenticação
+        if API_KEY:
+            params['chave'] = API_KEY
+        
+        return params
     
     def _make_request(
         self,
@@ -63,10 +87,15 @@ class WebPostoClient:
         data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Executa uma requisição HTTP para a API."""
+        # Construir URL completa
         url = f"{self.base_url}{endpoint}"
+        
+        # Adicionar parâmetro de autenticação
+        params = self._add_auth_param(params)
         
         try:
             logger.info(f"Requisição {method} para: {url}")
+            logger.debug(f"Parâmetros: {params}")
             
             response = requests.request(
                 method=method,
@@ -88,15 +117,19 @@ class WebPostoClient:
                 except json.JSONDecodeError:
                     return {"success": True, "data": response.text}
             else:
+                error_msg = response.text[:500] if response.text else f"Erro HTTP {response.status_code}"
                 return {
                     "success": False,
-                    "error": f"Erro {response.status_code}: {response.text}",
+                    "error": f"Erro {response.status_code}: {error_msg}",
                     "status_code": response.status_code
                 }
                 
         except requests.exceptions.Timeout:
             logger.error(f"Timeout ao acessar {url}")
-            return {"success": False, "error": "Timeout na requisição"}
+            return {"success": False, "error": "Timeout na requisição (30s)"}
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Erro de conexão: {e}")
+            return {"success": False, "error": f"Erro de conexão: {e}"}
         except requests.exceptions.RequestException as e:
             logger.error(f"Erro na requisição: {e}")
             return {"success": False, "error": str(e)}
@@ -104,8 +137,8 @@ class WebPostoClient:
     def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         return self._make_request("GET", endpoint, params=params)
     
-    def post(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        return self._make_request("POST", endpoint, data=data)
+    def post(self, endpoint: str, data: Dict[str, Any], params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        return self._make_request("POST", endpoint, params=params, data=data)
     
     def put(self, endpoint: str, data: Dict[str, Any], params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         return self._make_request("PUT", endpoint, params=params, data=data)
@@ -128,6 +161,8 @@ mcp = FastMCP("webposto-mcp")
 
 def format_currency(value: float) -> str:
     """Formata valor como moeda brasileira."""
+    if value is None:
+        return "R$ 0,00"
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def format_date(date_str: str) -> str:
@@ -147,6 +182,29 @@ def extract_records(data: Any) -> list:
     if isinstance(data, dict):
         return data.get('resultados', data.get('registros', data.get('data', [])))
     return []
+
+def format_response(data: Any, max_records: int = 50) -> str:
+    """Formata a resposta da API para exibição."""
+    records = extract_records(data)
+    
+    if not records:
+        if isinstance(data, dict) and data:
+            return json.dumps(data, indent=2, ensure_ascii=False)
+        return "Nenhum registro encontrado."
+    
+    output = [f"Total de registros: {len(records)}\n"]
+    
+    for i, record in enumerate(records[:max_records], 1):
+        record_str = json.dumps(record, indent=2, ensure_ascii=False)
+        # Limitar tamanho de cada registro
+        if len(record_str) > 1000:
+            record_str = record_str[:1000] + "..."
+        output.append(f"--- Registro {i} ---\n{record_str}")
+    
+    if len(records) > max_records:
+        output.append(f"\n... e mais {len(records) - max_records} registros (use o parâmetro limite para ajustar)")
+    
+    return "\n".join(output)
 
 
 # =============================================================================
@@ -175,7 +233,7 @@ def receber_titulo_convertido(dados: Dict[str, Any]) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -199,7 +257,7 @@ def receber_titulo(dados: Dict[str, Any]) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -224,7 +282,7 @@ def receber_cheque(empresa_codigo: Optional[int] = None, dados: Dict[str, Any]) 
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -248,7 +306,7 @@ def receber_cartoes(dados: Dict[str, Any]) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -272,7 +330,7 @@ def reajustar_estoque_produto_combustivel(dados: Dict[str, Any]) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -297,7 +355,7 @@ def alterar_cliente_grupo(id: str, dados: Dict[str, Any]) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -322,7 +380,7 @@ def alterar_cliente(id: str, dados: Dict[str, Any]) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -348,7 +406,7 @@ def alterar_produto(id: str, empresa_codigo: Optional[int] = None, dados: Dict[s
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -385,20 +443,7 @@ def consultar_transferencia_bancaria(empresa_codigo: Optional[int] = None, data_
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -413,12 +458,15 @@ def incluir_transferencia(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/TRANSFERENCIA_BANCARIA", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/TRANSFERENCIA_BANCARIA", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -463,20 +511,7 @@ def consultar_titulo_receber(turno: Optional[int] = None, empresa_codigo: Option
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -491,12 +526,15 @@ def incluir_titulo_receber(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/TITULO_RECEBER", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/TITULO_RECEBER", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -545,20 +583,7 @@ def consultar_titulo_pagar(data_inicial: Optional[str] = None, data_final: Optio
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -573,12 +598,15 @@ def incluir_titulo_pagar(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/TITULO_PAGAR", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/TITULO_PAGAR", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -593,12 +621,15 @@ def consultar_revendedores() -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/REVENDEDORES_ANP", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/REVENDEDORES_ANP", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -613,12 +644,15 @@ def reajustar_produto(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/REAJUSTAR_PRODUTO", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/REAJUSTAR_PRODUTO", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -633,12 +667,15 @@ def produto_inventario(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/PRODUTO_INVENTARIO", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/PRODUTO_INVENTARIO", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -653,12 +690,15 @@ def incluir_produto_comissao(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/PRODUTO_COMISSAO", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/PRODUTO_COMISSAO", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -674,12 +714,15 @@ def incluir_prazo_tabela_preco_item(id: str, dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/PRAZO_TABELA_PRECO/{id}/ITEM", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/PRAZO_TABELA_PRECO/{id}/ITEM", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -694,12 +737,15 @@ def pedido_compra(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/PEDIDO_COMPRAS", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/PEDIDO_COMPRAS", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -740,20 +786,7 @@ def consultar_cliente(cliente_codigo_externo: Optional[str] = None, cliente_codi
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -768,12 +801,15 @@ def incluir_cliente(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/CLIENTE", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/CLIENTE", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -788,12 +824,15 @@ def incluir_cliente_1(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/CLIENTE", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/CLIENTE", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -832,20 +871,7 @@ def consultar_movimento_conta(empresa_codigo: Optional[int] = None, data_inicial
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -860,12 +886,15 @@ def incluir_movimento_conta(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/MOVIMENTO_CONTA", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/MOVIMENTO_CONTA", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -898,20 +927,7 @@ def consultar_lancamento_contabil(empresa_codigo: Optional[int] = None, data_ini
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -926,12 +942,15 @@ def incluir_lancamento_contabil(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/LANCAMENTO_CONTABIL", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/LANCAMENTO_CONTABIL", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -947,12 +966,15 @@ def incluir_produto(empresa_codigo: Optional[int] = None, dados: Dict[str, Any])
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/INCLUIR_PRODUTO", data=dados)
+    params = {}
+        if empresa_codigo is not None: params["empresaCodigo"] = empresa_codigo
+    
+    result = client.post("/INTEGRACAO/INCLUIR_PRODUTO", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -967,12 +989,15 @@ def incluir_ofx(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/INCLUIR_OFX", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/INCLUIR_OFX", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -1001,20 +1026,7 @@ def consultar_grupo_cliente(grupo_codigo: Optional[int] = None, grupo_codigo_ext
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1029,12 +1041,15 @@ def incluir_cliente_grupo(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/GRUPO_CLIENTE", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/GRUPO_CLIENTE", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -1049,12 +1064,15 @@ def envio_whata_app() -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/ENVIO_WHATSAPP", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/ENVIO_WHATSAPP", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -1069,12 +1087,15 @@ def envio_email() -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/ENVIO_EMAIL", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/ENVIO_EMAIL", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -1089,12 +1110,15 @@ def vincular_cliente_unidade_negocio(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/CLIENTE_UNIDADE_NEGOCIO", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/CLIENTE_UNIDADE_NEGOCIO", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -1110,12 +1134,15 @@ def incluir_cliente_prazo(codigo_cliente: str, dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/CLIENTE_PRAZO/{codigoCliente}", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/CLIENTE_PRAZO/{codigoCliente}", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -1156,20 +1183,7 @@ def consultar_cartao(turno: Optional[int] = None, empresa_codigo: Optional[int] 
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1184,12 +1198,15 @@ def incluir_cartao(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/CARTAO", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/CARTAO", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -1204,12 +1221,15 @@ def incluir_brinde(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/BRINDE", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/BRINDE", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -1224,12 +1244,15 @@ def autoriza_pagamento_abastecimento(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/AUTORIZA_PAGAMENTO_ABASTECIMENTO", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/AUTORIZA_PAGAMENTO_ABASTECIMENTO", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -1244,12 +1267,15 @@ def autorizar_nfe(nota_codigo: str) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/AUTORIZAR_NFE_SAIDA/{notaCodigo}", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/AUTORIZAR_NFE_SAIDA/{notaCodigo}", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -1264,12 +1290,15 @@ def alterar_preco_combustivel() -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/ALTERACAO_PRECO_COMBUSTIVEL", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/ALTERACAO_PRECO_COMBUSTIVEL", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -1284,12 +1313,16 @@ def pagar_titulo_pagar() -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/ALTERACAO_PRECO_COMBUSTIVEL", data=dados)
+    endpoint = f"/INTEGRACAO/TITULO_PAGAR/PAGAR"
+    params = {}
+
+    
+    result = client.put(endpoint, data=dados, params=params)  # PATCH via PUT
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -1305,8 +1338,10 @@ def excluir_cartao(id: str) -> str:
     """
 
     endpoint = f"/INTEGRACAO/CARTAO/{id}"
+    params = {}
+
     
-    result = client.delete(endpoint)
+    result = client.delete(endpoint, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
@@ -1327,13 +1362,15 @@ def alterar_cartao(id: str) -> str:
     """
 
     endpoint = f"/INTEGRACAO/CARTAO/{id}"
+    params = {}
+
     
-    result = client.delete(endpoint)
+    result = client.put(endpoint, data=dados, params=params)  # PATCH via PUT
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return "Registro excluído com sucesso."
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -1362,20 +1399,7 @@ def venda_resumo(empresa_codigo: Optional[list] = None, data_inicial: Optional[s
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1406,20 +1430,7 @@ def consultar_item_fidelidade(venda_item_voucher_codigo: Optional[int] = None, v
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1456,20 +1467,7 @@ def consultar_venda_item(empresa_codigo: Optional[int] = None, usa_produto_lmc: 
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1512,20 +1510,7 @@ def consultar_venda_forma_pagamento(turno: Optional[int] = None, empresa_codigo:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1568,20 +1553,7 @@ def consultar_venda(turno: Optional[int] = None, empresa_codigo: Optional[int] =
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1605,20 +1577,7 @@ def consultar_venda_completa(id_list: str, vendas_com_dfe: Optional[bool] = None
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1657,20 +1616,7 @@ def consultar_vale_funcionario(empresa_codigo: Optional[list] = None, data_inici
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1695,20 +1641,7 @@ def consultar_usuario_empresa(ultimo_codigo: Optional[int] = None, limite: Optio
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1733,20 +1666,7 @@ def consultar_usuario(ultimo_codigo: Optional[int] = None, limite: Optional[int]
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1781,20 +1701,7 @@ def troca_preco(data_inicial: str, data_final: str, realizada: Optional[bool] = 
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1823,20 +1730,7 @@ def consultar_tanque(tanque_codigo: Optional[int] = None, empresa_codigo: Option
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1863,20 +1757,7 @@ def tabela_preco_prazo(tabela_preco_prazo_codigo: Optional[int] = None, ultimo_c
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1915,20 +1796,7 @@ def consultar_sat(empresa_codigo: Optional[list] = None, data_inicial: str, data
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -1965,20 +1833,7 @@ def sangria_caixa(data_inicial: Optional[str] = None, data_final: Optional[str] 
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2003,20 +1858,7 @@ def relatorio_pernonalizado(ultimo_codigo: Optional[int] = None, limite: Optiona
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2043,20 +1885,7 @@ def consultar_produto_meta(grupo_meta_codigo: Optional[int] = None, ultimo_codig
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2079,20 +1908,7 @@ def consultar_produto_lmc_lmp(codigo_produt_lmc: Optional[int] = None) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2121,20 +1937,7 @@ def consultar_produto_estoque(empresa_codigo: int, data_hora: Optional[str] = No
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2163,20 +1966,7 @@ def consultar_produto_empresa(data_hora_atualizacao: Optional[str] = None, usa_p
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2211,20 +2001,7 @@ def consultar_produto(empresa_codigo: Optional[int] = None, produto_codigo: Opti
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2249,20 +2026,7 @@ def consultar_prazos(prazo_codigo: Optional[int] = None, prazo_codigo_externo: O
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2289,20 +2053,7 @@ def consultar_plano_conta_gerencial(plano_conta_codigo: Optional[int] = None, ul
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2327,20 +2078,7 @@ def consultar_plano_conta_contabil(ultimo_codigo: Optional[int] = None, limite: 
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2365,20 +2103,7 @@ def consultar_placares(data_inicial: str, data_final: str) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2403,20 +2128,7 @@ def consultar_pisconfins(ultimo_codigo: Optional[int] = None, limite: Optional[i
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2449,20 +2161,7 @@ def consultar_trr_pedido(empresa_codigo: Optional[int] = None, data_inicial: Opt
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2493,20 +2192,7 @@ def consultar_pdv(pdv_referencia: Optional[str] = None, pdv_codigo: Optional[int
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2541,20 +2227,7 @@ def consultar_nfse(empresa_codigo: Optional[list] = None, data_inicial: Optional
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2595,20 +2268,7 @@ def consultar_nfse_1(empresa_codigo: Optional[list] = None, data_inicial: Option
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2643,20 +2303,7 @@ def consultar_nota_saida_item(data_inicial: Optional[str] = None, data_final: Op
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2691,20 +2338,7 @@ def consultar_nota_manifestacao(data_inicial: Optional[str] = None, data_final: 
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2747,20 +2381,7 @@ def consultar_nfe_saida(chave_documento: Optional[str] = None, data_inicial: str
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2793,20 +2414,7 @@ def consulta_nfe_xml(id: Optional[int] = None, modelo_documento: Optional[int] =
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2841,20 +2449,7 @@ def consultar_nfce(empresa_codigo: Optional[list] = None, data_inicial: str, dat
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2884,20 +2479,7 @@ def consult_nfcea_xml(id: str, modelo_documento: int, numero_documento: int, emp
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2936,20 +2518,7 @@ def consultar_relatorio_mapa(empresa_codigo: Optional[list] = None, data_inicial
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -2974,20 +2543,7 @@ def consultar_icms(ultimo_codigo: Optional[int] = None, limite: Optional[int] = 
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3012,20 +2568,7 @@ def consultar_grupo_meta(ultimo_codigo: Optional[int] = None, limite: Optional[i
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3052,20 +2595,7 @@ def consultar_grupo(grupo_codigo_externo: Optional[str] = None, ultimo_codigo: O
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3090,20 +2620,7 @@ def consultar_funcoes(ultimo_codigo: Optional[int] = None, limite: Optional[int]
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3130,20 +2647,7 @@ def consultar_funcionario_meta(grupo_meta_codigo: Optional[int] = None, ultimo_c
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3172,20 +2676,7 @@ def consultar_funcionario(funcionario_codigo: Optional[int] = None, empresa_codi
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3220,20 +2711,7 @@ def consultar_fornecedor(retorna_observacoes: Optional[bool] = None, data_hora_a
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3258,20 +2736,7 @@ def consultar_forma_pagamento(ultimo_codigo: Optional[int] = None, limite: Optio
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3302,20 +2767,7 @@ def consultar_esclusao_financeiro(empresa_codigo: Optional[int] = None, data_hor
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3346,20 +2798,7 @@ def estoque_periodo(data_final: str, empresa_codigo: Optional[int] = None, data_
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3392,20 +2831,7 @@ def estoque(empresa_codigo: Optional[int] = None, data_hora_atualizacao: Optiona
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3432,20 +2858,7 @@ def consultar_empresa(empresa_codigo_externo: Optional[str] = None, ultimo_codig
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3494,20 +2907,7 @@ def consultar_duplicata(data_inicial: Optional[str] = None, data_final: Optional
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3544,20 +2944,7 @@ def consultar_dre(apuracao_caixa: Optional[bool] = None, data_inicial: str, data
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3586,20 +2973,7 @@ def dfe_xml(modelo_documento: int, numero_documento: int, empresa_codigo: int, s
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3626,20 +3000,7 @@ def consultar_conta(empresa_codigo: Optional[int] = None, ultimo_codigo: Optiona
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3668,20 +3029,7 @@ def consultar_contagem_estoque(data_contagem: str, contagem_referencia: Optional
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3712,24 +3060,11 @@ def consumo_cliente(token: str, data_inicial: Optional[str] = None, data_final: 
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
-def consultar_view(dias: Optional[int] = None, volume_minimo: Optional[int] = None, view: Optional[str] = None, chave: Optional[list] = None) -> str:
+def consultar_view(dias: Optional[int] = None, volume_minimo: Optional[int] = None, view: Optional[str] = None) -> str:
     """
     consultarView - GET /INTEGRACAO/CONSULTAR_VIEW
     
@@ -3737,7 +3072,6 @@ def consultar_view(dias: Optional[int] = None, volume_minimo: Optional[int] = No
         dias: Parâmetro dias
         volume_minimo: Parâmetro volumeMinimo
         view: Parâmetro view
-        chave: Parâmetro chave
     
     Returns:
         Resultado da operação formatado como string.
@@ -3747,27 +3081,13 @@ def consultar_view(dias: Optional[int] = None, volume_minimo: Optional[int] = No
         if dias is not None: params["dias"] = dias
         if volume_minimo is not None: params["volumeMinimo"] = volume_minimo
         if view is not None: params["view"] = view
-        if chave is not None: params["chave"] = chave
     
     result = client.get("/INTEGRACAO/CONSULTAR_VIEW", params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3790,20 +3110,7 @@ def consultar_sub_grupo_rede() -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3826,20 +3133,7 @@ def consultar_sub_grupo_rede_1() -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3862,20 +3156,7 @@ def consultar_preco_idenfitid() -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3914,20 +3195,7 @@ def consultar_lmc(empresa_codigo: Optional[list] = None, data_inicial: str, data
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -3966,20 +3234,7 @@ def consultar_lmc_1(empresa_codigo: Optional[list] = None, data_inicial: str, da
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4002,20 +3257,7 @@ def consultar_funcionario_idenfitid() -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4042,20 +3284,7 @@ def consultar_despesa_financeiro_rede(data_inicial: str, data_final: str, apurac
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4078,20 +3307,7 @@ def consultar_cartoes_clubgas(nome_tabela: str) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4132,20 +3348,7 @@ def consultar_compra_item(turno: Optional[int] = None, empresa_codigo: Optional[
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4188,20 +3391,7 @@ def consultar_compra(turno: Optional[int] = None, empresa_codigo: Optional[int] 
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4224,20 +3414,7 @@ def consultar_compra_xml(chave_nfe: str) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4268,20 +3445,7 @@ def cliente_frota(cliente_codigo_externo: Optional[str] = None, cliente_codigo: 
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4306,20 +3470,7 @@ def consultar_cliente_empresa(ultimo_codigo: Optional[int] = None, limite: Optio
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4364,20 +3515,7 @@ def consultar_cheque_pagar(empresa_codigo: Optional[int] = None, data_inicial: s
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4418,20 +3556,7 @@ def consultar_cheque(turno: Optional[int] = None, empresa_codigo: Optional[int] 
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4458,20 +3583,7 @@ def consultar_centro_custo(centro_custo_codigo_externo: Optional[str] = None, ul
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4510,20 +3622,7 @@ def consultar_pisconfins_1(empresa_codigo: Optional[list] = None, data_inicial: 
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4562,20 +3661,7 @@ def consultar_cartao_pagar(empresa_codigo: Optional[int] = None, data_inicial: s
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4604,20 +3690,7 @@ def consultar_cheque_pagar_1(cartao_compra_codigo: Optional[int] = None, empresa
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4650,20 +3723,7 @@ def consultar_caixa_apresentado(data_inicial: str, data_final: str, data_hora_at
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4698,20 +3758,7 @@ def consultar_caixa(data_inicial: str, data_final: str, turno: Optional[int] = N
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4736,20 +3783,7 @@ def consultar_bomba(bomba_codigo: Optional[int] = None, empresa_codigo: Optional
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4778,20 +3812,7 @@ def consultar_bico(bico_codigo: Optional[int] = None, empresa_codigo: Optional[i
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4814,20 +3835,7 @@ def aprix_preco_cliente() -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4852,20 +3860,7 @@ def aprix_movimento(data_inicial: str, data_final: str) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4890,20 +3885,7 @@ def aprix_custo(data_inicial: str, data_final: str) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4934,20 +3916,7 @@ def consultar_administradora(administradora_codigo: Optional[int] = None, empres
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -4982,20 +3951,7 @@ def consultar_adiantamento_fornecedor(fornecedor_codigo: Optional[int] = None, e
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -5026,20 +3982,7 @@ def consultar_abastecimento(data_inicial: str, data_final: str, tipo_data: Optio
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -5055,8 +3998,10 @@ def excluir_titulo(id: str) -> str:
     """
 
     endpoint = f"/INTEGRACAO/TITULO_PAGAR/{id}"
+    params = {}
+
     
-    result = client.delete(endpoint)
+    result = client.delete(endpoint, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
@@ -5077,8 +4022,10 @@ def excluir_prazo_tabela_preco_item(id: str) -> str:
     """
 
     endpoint = f"/INTEGRACAO/PRAZO_TABELA_PRECO_ITEM/{id}"
+    params = {}
+
     
-    result = client.delete(endpoint)
+    result = client.delete(endpoint, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
@@ -5113,7 +4060,7 @@ def receber_titulo_cartao(id: str, dados: Dict[str, Any]) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -5128,12 +4075,15 @@ def incluir_pedido(dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -5149,12 +4099,15 @@ def pedido_faturar(id: str, dados: Dict[str, Any]) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/FATURAR", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/FATURAR", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -5169,12 +4122,15 @@ def pedido_danfe(id: str) -> str:
         Resultado da operação formatado como string.
     """
 
-    result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/DANFE", data=dados)
+    params = {}
+
+    
+    result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/DANFE", data=dados, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    return f"Operação realizada com sucesso. Resposta: {json.dumps(result.get('data', {}), indent=2, ensure_ascii=False)}"
+    return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
 
 
 @mcp.tool()
@@ -5197,20 +4153,7 @@ def cliente_consultar(cnpj_cpf: str) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -5233,20 +4176,7 @@ def consultar_produto_combustivel() -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -5269,20 +4199,7 @@ def consultar_pedido(id: str) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -5298,8 +4215,10 @@ def excluir_pedido(id: str) -> str:
     """
 
     endpoint = f"/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}"
+    params = {}
+
     
-    result = client.delete(endpoint)
+    result = client.delete(endpoint, params=params)
     
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
@@ -5327,20 +4246,7 @@ def pedido_xml(id: str) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -5363,20 +4269,7 @@ def pedido_status(pedidos: Optional[list] = None) -> str:
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 # =============================================================================
@@ -5464,20 +4357,7 @@ def vendas_periodo(cupom_cancelado: bool, ordenacao_por: str, agrupamento_por: O
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -5583,20 +4463,7 @@ def relatorio_personalizado(relatorio_codigo: str, cliente: Optional[list] = Non
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -5665,20 +4532,7 @@ def produtividade_funcionario(tipo_relatorio: str, tipo_data: Optional[str] = No
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 @mcp.tool()
@@ -5737,20 +4591,7 @@ def mapa_desempenho(data_inicial: str, data_final: str, funcionario: Optional[li
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     
-    data = result.get("data", {})
-    records = extract_records(data)
-    
-    if not records:
-        return "Nenhum registro encontrado."
-    
-    output = [f"Total de registros: {len(records)}\n"]
-    for i, record in enumerate(records[:50], 1):  # Limitar a 50 registros na saída
-        output.append(f"{i}. {json.dumps(record, indent=2, ensure_ascii=False)[:500]}")
-    
-    if len(records) > 50:
-        output.append(f"\n... e mais {len(records) - 50} registros")
-    
-    return "\n".join(output)
+    return format_response(result.get("data", {}))
 
 
 # =============================================================================
@@ -5760,10 +4601,20 @@ def mapa_desempenho(data_inicial: str, data_final: str, funcionario: Optional[li
 def main():
     """Ponto de entrada principal do servidor MCP."""
     if not API_KEY:
-        logger.warning("WEBPOSTO_API_KEY não configurada. Defina a variável de ambiente.")
+        logger.error("=" * 60)
+        logger.error("ERRO: WEBPOSTO_API_KEY não configurada!")
+        logger.error("Defina a variável de ambiente WEBPOSTO_API_KEY com sua chave de API.")
+        logger.error("Exemplo: export WEBPOSTO_API_KEY='sua-chave-aqui'")
+        logger.error("=" * 60)
+        sys.exit(1)
     
-    logger.info("Iniciando WebPosto MCP Server...")
-    logger.info(f"URL da API: {WEBPOSTO_URL}")
+    logger.info("=" * 60)
+    logger.info("WebPosto MCP Server - Quality Automação")
+    logger.info("=" * 60)
+    logger.info(f"URL Base: {WEBPOSTO_BASE_URL}")
+    logger.info(f"Chave API: {'*' * 8}...{API_KEY[-8:] if len(API_KEY) > 8 else '****'}")
+    logger.info("Autenticação: via parâmetro 'chave' na query string")
+    logger.info("=" * 60)
     
     mcp.run()
 

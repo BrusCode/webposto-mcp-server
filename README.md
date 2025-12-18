@@ -2,11 +2,11 @@
 
 ![Quality Automação](https://www.qualityautomacao.com.br/assets/img/logo.png)
 
-**Versão:** 1.0.0
+**Versão:** 1.1.0
 
 **Licença:** MIT
 
-**Autor:** Quality Automação & Manus AI
+**Autor:** Quality Automação
 
 ---
 
@@ -15,12 +15,14 @@
 - [Visão Geral](#visão-geral)
 - [Recursos](#recursos)
 - [Arquitetura](#arquitetura)
+- [Autenticação](#autenticação)
 - [Instalação e Configuração](#instalação-e-configuração)
   - [Pré-requisitos](#pré-requisitos)
   - [Opção 1: Docker (Recomendado)](#opção-1-docker-recomendado)
-  - [Opção 2: WSL (Subsistema Windows para Linux) ou Linux](#opção-2-wsl-subsistema-windows-para-linux-ou-linux)
+  - [Opção 2: WSL ou Linux](#opção-2-wsl-ou-linux)
   - [Opção 3: Windows Nativo (PowerShell)](#opção-3-windows-nativo-powershell)
 - [Uso](#uso)
+- [Exemplos de Requisições](#exemplos-de-requisições)
 - [Deploy em Nuvem (AWS Serverless)](#deploy-em-nuvem-aws-serverless)
 - [Desenvolvimento](#desenvolvimento)
 - [Licença](#licença)
@@ -39,43 +41,65 @@ Este projeto foi desenvolvido seguindo as melhores práticas de engenharia de so
 - **Arquitetura Modular:** Código organizado em módulos de configuração, cliente de API e ferramentas, facilitando a manutenção e extensão.
 - **Pronto para Produção:** Containerização com Docker e Docker Compose para um deploy rápido e consistente.
 - **Múltiplas Opções de Instalação:** Suporte para Docker, WSL/Linux e Windows nativo.
-- **Deploy em Nuvem:** Inclui um template AWS SAM (Serverless Application Model) para deploy da aplicação como uma função Lambda com API Gateway, permitindo uma infraestrutura serverless, escalável e de baixo custo.
+- **Deploy em Nuvem:** Inclui um template AWS SAM (Serverless Application Model) para deploy da aplicação como uma função Lambda com API Gateway.
 - **Segurança:** Utiliza usuários não-root nos containers e segue as melhores práticas de gerenciamento de credenciais via variáveis de ambiente.
-- **Documentação Abrangente:** Instruções detalhadas para instalação, configuração e uso em diferentes ambientes.
 
 ## Arquitetura
 
-O servidor é construído em Python 3.11 com base no framework **FastAPI** e no SDK do **MCP**. A arquitetura foi desenhada para ser limpa e desacoplada:
+O servidor é construído em Python 3.11 com base no SDK do **MCP**:
 
 ```
 webposto-mcp-server/
-├── aws/                    # Arquivos para deploy serverless na AWS (SAM)
+├── aws/                          # Infraestrutura AWS (SAM)
 │   └── template.yaml
-├── scripts/                # Scripts de inicialização para diferentes S.O.
-│   ├── start_server.ps1
-│   └── start_server.sh
-├── src/                    # Código fonte da aplicação
-│   ├── api/                # Módulo do cliente da API WebPosto
-│   ├── tools/              # Ferramentas MCP (geradas dinamicamente)
-│   ├── config.py           # Configuração e variáveis de ambiente
-│   ├── lambda_handler.py   # Ponto de entrada para AWS Lambda
-│   └── server.py           # Ponto de entrada principal e lógica do servidor
-├── tests/                  # Testes automatizados
-├── .dockerignore
-├── .env.example            # Exemplo de arquivo de configuração
-├── .gitignore
-├── Dockerfile              # Define a imagem do container
-├── docker-compose.yml      # Orquestração do container
-├── LICENSE
-├── pyproject.toml          # Configuração do projeto e dependências
+├── scripts/                      # Scripts de inicialização
+│   ├── start_server.ps1          # Windows PowerShell
+│   └── start_server.sh           # Linux/WSL/macOS
+├── src/                          # Código fonte
+│   ├── api/                      # Cliente HTTP
+│   │   └── webposto_client.py
+│   ├── tools/                    # Ferramentas MCP modulares
+│   ├── config.py                 # Configuração via env vars
+│   ├── lambda_handler.py         # Handler AWS Lambda
+│   └── server.py                 # Servidor MCP principal
+├── tests/                        # Testes automatizados
+├── .env.example                  # Template de configuração
+├── Dockerfile                    # Containerização
+├── docker-compose.yml            # Orquestração de containers
 └── README.md
 ```
 
-- **`src/server.py`**: É o coração da aplicação. Ele inicializa o servidor MCP, carrega as ferramentas e define a lógica principal.
-- **`src/api/webposto_client.py`**: Implementa um cliente HTTP robusto para se comunicar com a API do WebPosto, gerenciando autenticação, requisições e tratamento de erros.
-- **`src/tools/`**: As ferramentas MCP são geradas dinamicamente a partir da especificação da API, garantindo que qualquer atualização na API possa ser rapidamente incorporada ao servidor.
-- **`Dockerfile`**: Utiliza um build multi-stage para criar uma imagem Docker otimizada e segura.
-- **`aws/template.yaml`**: Define a infraestrutura como código para um deploy serverless na AWS.
+---
+
+## Autenticação
+
+A API do WebPosto utiliza autenticação via **parâmetro `chave` na query string** de cada requisição. Este é o formato oficial conforme documentação da API.
+
+### Exemplo de Requisição
+
+```bash
+curl --request GET \
+  --url 'https://web.qualityautomacao.com.br/INTEGRACAO/VENDA_RESUMO?dataInicial=2025-12-18&dataFinal=2025-12-18&situacao=A&chave=SUA_CHAVE_AQUI&empresaCodigo=7' \
+  --header 'Accept: application/json'
+```
+
+### Configuração da Chave
+
+A chave de API deve ser configurada na variável de ambiente `WEBPOSTO_API_KEY`:
+
+```bash
+# Linux/WSL/macOS
+export WEBPOSTO_API_KEY="sua-chave-aqui"
+
+# Windows PowerShell
+$env:WEBPOSTO_API_KEY="sua-chave-aqui"
+```
+
+Ou no arquivo `.env`:
+
+```env
+WEBPOSTO_API_KEY=sua-chave-aqui
+```
 
 ---
 
@@ -84,101 +108,151 @@ webposto-mcp-server/
 ### Pré-requisitos
 
 - **Git:** Para clonar o repositório.
-- **Chave de API do WebPosto:** Você precisará de uma chave de API válida para se autenticar.
+- **Chave de API do WebPosto:** Obtenha sua chave no painel administrativo do WebPosto.
 
 ### Opção 1: Docker (Recomendado)
 
 Este é o método mais simples e recomendado, pois isola todas as dependências.
 
-1.  **Instale Docker e Docker Compose:**
-    - [Instruções para Docker](https://docs.docker.com/get-docker/)
-    - [Instruções para Docker Compose](https://docs.docker.com/compose/install/)
+1. **Instale Docker e Docker Compose:**
+   - [Instruções para Docker](https://docs.docker.com/get-docker/)
+   - [Instruções para Docker Compose](https://docs.docker.com/compose/install/)
 
-2.  **Clone o repositório:**
-    ```bash
-    git clone https://github.com/BrusCode/webposto-mcp-server.git
-    cd helion-cloud
-    ```
+2. **Clone o repositório:**
+   ```bash
+   git clone https://github.com/BrusCode/webposto-mcp-server.git
+   cd webposto-mcp-server
+   ```
 
-3.  **Configure as variáveis de ambiente:**
-    Copie o arquivo de exemplo `.env.example` para `.env` e edite-o, inserindo sua chave de API.
-    ```bash
-    cp .env.example .env
-    # Agora, edite o arquivo .env com seu editor preferido
-    # Ex: nano .env
-    ```
-    Substitua `SUA_API_KEY_AQUI` pela sua chave de API do WebPosto.
+3. **Configure as variáveis de ambiente:**
+   ```bash
+   cp .env.example .env
+   # Edite o arquivo .env com seu editor preferido
+   # Substitua SUA_CHAVE_AQUI pela sua chave de API
+   ```
 
-4.  **Inicie o servidor:**
-    ```bash
-    docker-compose up -d
-    ```
+4. **Inicie o servidor:**
+   ```bash
+   docker-compose up -d
+   ```
 
-O servidor MCP estará em execução. Para verificar os logs, use `docker-compose logs -f`.
+Para verificar os logs: `docker-compose logs -f`
 
-### Opção 2: WSL (Subsistema Windows para Linux) ou Linux
+### Opção 2: WSL ou Linux
 
-Este método requer a instalação do Python e das dependências manualmente.
+1. **Instale o Python 3.10 ou superior.**
 
-1.  **Instale o Python 3.10 ou superior.**
+2. **Clone o repositório:**
+   ```bash
+   git clone https://github.com/BrusCode/webposto-mcp-server.git
+   cd webposto-mcp-server
+   ```
 
-2.  **Clone o repositório e navegue até a pasta:**
-    ```bash
-    git clone https://github.com/BrusCode/webposto-mcp-server.git
-    cd helion-cloud
-    ```
+3. **Configure as variáveis de ambiente:**
+   ```bash
+   cp .env.example .env
+   nano .env  # ou seu editor preferido
+   ```
 
-3.  **Configure as variáveis de ambiente:**
-    Copie `.env.example` para `.env` e insira sua chave de API, como descrito na seção Docker.
-    ```bash
-    cp .env.example .env
-    nano .env
-    ```
-
-4.  **Execute o script de inicialização:**
-    O script irá criar um ambiente virtual, instalar as dependências e iniciar o servidor.
-    ```bash
-    chmod +x scripts/start_server.sh
-    ./scripts/start_server.sh
-    ```
+4. **Execute o script de inicialização:**
+   ```bash
+   chmod +x scripts/start_server.sh
+   ./scripts/start_server.sh
+   ```
 
 ### Opção 3: Windows Nativo (PowerShell)
 
-1.  **Instale Python 3.10 ou superior** a partir do [site oficial do Python](https://www.python.org/downloads/windows/) (certifique-se de marcar a opção "Add Python to PATH").
+1. **Instale Python 3.10 ou superior** do [site oficial](https://www.python.org/downloads/windows/) (marque "Add Python to PATH").
 
-2.  **Clone o repositório:**
-    ```powershell
-    git clone https://github.com/BrusCode/webposto-mcp-server.git
-    cd helion-cloud
-    ```
+2. **Clone o repositório:**
+   ```powershell
+   git clone https://github.com/BrusCode/webposto-mcp-server.git
+   cd webposto-mcp-server
+   ```
 
-3.  **Configure as variáveis de ambiente:**
-    Copie `.env.example` para `.env` e insira sua chave de API.
-    ```powershell
-    Copy-Item .env.example .env
-    # Abra o arquivo .env com um editor (ex: notepad .env) e insira sua chave.
-    ```
+3. **Configure as variáveis de ambiente:**
+   ```powershell
+   Copy-Item .env.example .env
+   notepad .env  # Edite e insira sua chave
+   ```
 
-4.  **Execute o script de inicialização:**
-    Abra um terminal PowerShell, navegue até a pasta do projeto e execute:
-    ```powershell
-    # Pode ser necessário ajustar a política de execução de scripts
-    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
-
-    .\scripts\start_server.ps1
-    ```
+4. **Execute o script de inicialização:**
+   ```powershell
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+   .\scripts\start_server.ps1
+   ```
 
 ---
 
 ## Uso
 
-Após a inicialização, o servidor MCP estará pronto para receber conexões de um cliente compatível (como o Manus). Configure seu cliente para se conectar ao servidor. Se estiver rodando localmente, o servidor estará disponível via `stdio` ou, se configurado, via HTTP na porta `8000`.
+Após a inicialização, o servidor MCP estará pronto para receber conexões. Configure seu cliente MCP (como Claude Desktop ou Manus) para se conectar ao servidor.
+
+### Configuração no Claude Desktop
+
+Adicione ao arquivo de configuração do Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "webposto": {
+      "command": "python",
+      "args": ["-m", "src.server"],
+      "cwd": "/caminho/para/webposto-mcp-server",
+      "env": {
+        "WEBPOSTO_API_KEY": "sua-chave-aqui"
+      }
+    }
+  }
+}
+```
+
+---
+
+## Exemplos de Requisições
+
+### Consultar Vendas do Dia
+
+```
+Ferramenta: consultar_venda
+Parâmetros:
+  - data_inicial: "2025-12-18"
+  - data_final: "2025-12-18"
+```
+
+### Consultar Resumo de Vendas
+
+```
+Ferramenta: consultar_venda_resumo
+Parâmetros:
+  - data_inicial: "2025-12-18"
+  - data_final: "2025-12-18"
+  - situacao: "A"
+  - empresa_codigo: 7
+```
+
+### Consultar Abastecimentos
+
+```
+Ferramenta: consultar_abastecimento
+Parâmetros:
+  - data_inicial: "2025-12-18"
+  - data_final: "2025-12-18"
+```
+
+### Consultar Estoque
+
+```
+Ferramenta: consultar_estoque_periodo
+Parâmetros:
+  - data_final: "2025-12-18"
+```
 
 ---
 
 ## Deploy em Nuvem (AWS Serverless)
 
-O projeto está preparado para deploy na AWS como uma aplicação serverless, o que oferece alta escalabilidade e baixo custo operacional.
+O projeto está preparado para deploy na AWS como uma aplicação serverless.
 
 ### Pré-requisitos
 
@@ -189,30 +263,48 @@ O projeto está preparado para deploy na AWS como uma aplicação serverless, o 
 
 ### Passos para o Deploy
 
-1.  **Build do Projeto:**
-    ```bash
-    sam build --use-container
-    ```
+1. **Build do Projeto:**
+   ```bash
+   sam build --use-container
+   ```
 
-2.  **Deploy Guiado:**
-    O SAM CLI irá guiar você pelo processo de deploy, solicitando informações como o nome da stack e a chave da API (que será armazenada de forma segura no AWS Secrets Manager).
-    ```bash
-    sam deploy --guided
-    ```
+2. **Deploy Guiado:**
+   ```bash
+   sam deploy --guided
+   ```
 
-Após o deploy, o SAM fornecerá o endpoint do API Gateway que poderá ser usado para interagir com o servidor MCP.
+Após o deploy, o SAM fornecerá o endpoint do API Gateway.
 
 ---
 
 ## Desenvolvimento
 
-- **Estrutura do Código:** Siga a estrutura de pastas existente.
-- **Dependências:** Adicione novas dependências ao `pyproject.toml` e regenere o `requirements.txt` com `pip-compile` se necessário.
-- **Testes:** Crie testes para novas funcionalidades no diretório `tests/` e execute-os com `pytest`.
-- **Linting e Formatação:** O projeto usa `black`, `isort` e `ruff` para garantir a qualidade e consistência do código. Use os hooks de pré-commit para automatizar isso.
+### Estrutura do Código
+
+- `src/server.py`: Servidor MCP principal com todas as ferramentas
+- `src/api/webposto_client.py`: Cliente HTTP para a API WebPosto
+- `src/config.py`: Configuração via variáveis de ambiente
+
+### Executar Testes
+
+```bash
+pytest tests/ -v
+```
+
+### Linting e Formatação
+
+```bash
+black src/
+isort src/
+ruff check src/
+```
 
 ---
 
 ## Licença
 
 Este projeto está licenciado sob a **Licença MIT**. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+
+---
+
+**Quality Automação** - Sistema de Gestão de Postos WebPosto
