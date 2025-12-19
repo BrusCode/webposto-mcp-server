@@ -2,7 +2,7 @@
 
 ![Quality Automação](https://www.webposto.com.br/assets/logos/webposto/logo-wp.webp)
 
-**Versão:** 1.1.0
+**Versão:** 1.2.0
 
 **Licença:** MIT
 
@@ -192,20 +192,39 @@ Após a inicialização, o servidor MCP estará pronto para receber conexões. C
 
 Adicione ao arquivo de configuração do Claude Desktop (`claude_desktop_config.json`):
 
+**Windows:**
 ```json
 {
   "mcpServers": {
     "webposto": {
       "command": "python",
       "args": ["-m", "src.server"],
-      "cwd": "/caminho/para/webposto-mcp-server",
       "env": {
-        "WEBPOSTO_API_KEY": "sua-chave-aqui"
+        "WEBPOSTO_API_KEY": "sua-chave-aqui",
+        "PYTHONPATH": "C:/Users/SEU_USUARIO/webposto-mcp-server"
       }
     }
   }
 }
 ```
+
+**Linux/macOS:**
+```json
+{
+  "mcpServers": {
+    "webposto": {
+      "command": "python3",
+      "args": ["-m", "src.server"],
+      "env": {
+        "WEBPOSTO_API_KEY": "sua-chave-aqui",
+        "PYTHONPATH": "/home/seu_usuario/webposto-mcp-server"
+      }
+    }
+  }
+}
+```
+
+> **Importante:** O parâmetro `cwd` não é suportado pelo schema MCP. Use `PYTHONPATH` para indicar o diretório do projeto.
 
 ---
 
