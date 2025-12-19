@@ -1,0 +1,119 @@
+# =============================================================================
+# WebPosto MCP Server - Docker Stack com Build Local
+# Quality Automação
+# =============================================================================
+#
+# USE ESTE ARQUIVO SE VOCÊ CLONOU O REPOSITÓRIO LOCALMENTE
+#
+# INSTRUÇÕES:
+# 
+# 1. Clone o repositório:
+#    git clone https://github.com/BrusCode/webposto-mcp-server.git
+#    cd webposto-mcp-server
+#
+# 2. Crie o arquivo .env:
+#    cp .env.example .env
+#    # Edite o .env e adicione sua WEBPOSTO_API_KEY
+#
+# 3. Deploy via Docker Compose:
+#    docker-compose -f docker-stack-build.yml up -d --build
+#
+# 4. Ou via Portainer:
+#    - Stacks > Add Stack > Upload
+#    - Selecione este arquivo
+#    - Configure as variáveis de ambiente
+#    - Deploy
+#
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # ---------------------------------------------------------------------------
+  # WebPosto MCP Server - Build Local
+  # ---------------------------------------------------------------------------
+  webposto-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: quality-automacao/webposto-mcp:1.2.0
+    container_name: webposto-mcp-server
+    restart: unless-stopped
+    
+    # Variáveis de ambiente
+    environment:
+      # OBRIGATÓRIO
+      - WEBPOSTO_API_KEY=${WEBPOSTO_API_KEY:?Erro: WEBPOSTO_API_KEY é obrigatória}
+      
+      # OPCIONAL
+      - WEBPOSTO_URL=${WEBPOSTO_URL:-https://web.qualityautomacao.com.br}
+      - WEBPOSTO_EMPRESA_CODIGO=${WEBPOSTO_EMPRESA_CODIGO:-}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Python
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+    
+    # Arquivo .env (alternativa às variáveis acima)
+    env_file:
+      - .env
+    
+    # Volumes
+    volumes:
+      - webposto-logs:/app/logs
+    
+    # Recursos
+    deploy:
+      mode: replicated
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    
+    # Labels
+    labels:
+      - "portainer.stack.name=webposto-mcp"
+      - "com.quality.service=webposto-mcp"
+      - "com.quality.version=1.2.0"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    
+    # Rede
+    networks:
+      - webposto-network
+
+# -----------------------------------------------------------------------------
+# Volumes
+# -----------------------------------------------------------------------------
+volumes:
+  webposto-logs:
+    driver: local
+
+# -----------------------------------------------------------------------------
+# Rede
+# -----------------------------------------------------------------------------
+networks:
+  webposto-network:
+    driver: bridge
+    name: webposto-network

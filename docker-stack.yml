@@ -1,0 +1,141 @@
+# =============================================================================
+# WebPosto MCP Server - Docker Stack para Portainer
+# Quality Automação
+# =============================================================================
+#
+# INSTRUÇÕES DE DEPLOY VIA PORTAINER:
+# 
+# 1. Acesse o Portainer (ex: https://seu-servidor:9443)
+# 2. Vá em "Stacks" > "Add Stack"
+# 3. Nome: webposto-mcp
+# 4. Build method: "Web editor" ou "Upload"
+# 5. Cole este arquivo ou faça upload
+# 6. Em "Environment variables", adicione:
+#    - WEBPOSTO_API_KEY = sua-chave-api-aqui
+# 7. Clique em "Deploy the stack"
+#
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # ---------------------------------------------------------------------------
+  # WebPosto MCP Server - Servidor Principal
+  # ---------------------------------------------------------------------------
+  webposto-mcp:
+    image: python:3.11-slim
+    container_name: webposto-mcp-server
+    restart: unless-stopped
+    working_dir: /app
+    
+    # Comando de inicialização
+    command: >
+      bash -c "
+        pip install --no-cache-dir requests mcp pydantic pydantic-settings python-dotenv httpx &&
+        git clone https://github.com/BrusCode/webposto-mcp-server.git /app/repo 2>/dev/null || (cd /app/repo && git pull) &&
+        cd /app/repo &&
+        python -m src.server
+      "
+    
+    # Variáveis de ambiente
+    environment:
+      # =====================================================================
+      # OBRIGATÓRIO: Chave de API do WebPosto
+      # Obtenha sua chave no painel administrativo do WebPosto
+      # =====================================================================
+      - WEBPOSTO_API_KEY=${WEBPOSTO_API_KEY:?Erro: WEBPOSTO_API_KEY é obrigatória}
+      
+      # =====================================================================
+      # OPCIONAL: URL base da API
+      # Padrão: https://web.qualityautomacao.com.br
+      # =====================================================================
+      - WEBPOSTO_URL=${WEBPOSTO_URL:-https://web.qualityautomacao.com.br}
+      
+      # =====================================================================
+      # OPCIONAL: Código da empresa padrão
+      # Se informado, será usado como padrão nas consultas
+      # =====================================================================
+      - WEBPOSTO_EMPRESA_CODIGO=${WEBPOSTO_EMPRESA_CODIGO:-}
+      
+      # =====================================================================
+      # OPCIONAL: Nível de log
+      # Valores: DEBUG, INFO, WARNING, ERROR
+      # =====================================================================
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Python
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/repo
+    
+    # Volumes
+    volumes:
+      - webposto-data:/app/repo
+      - webposto-logs:/app/logs
+    
+    # Recursos
+    deploy:
+      mode: replicated
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      labels:
+        - "com.centurylinklabs.watchtower.enable=true"
+    
+    # Labels
+    labels:
+      - "portainer.stack.name=webposto-mcp"
+      - "com.quality.service=webposto-mcp"
+      - "com.quality.version=1.2.0"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+        labels: "service,version"
+    
+    # Rede
+    networks:
+      - webposto-network
+
+# -----------------------------------------------------------------------------
+# Volumes Persistentes
+# -----------------------------------------------------------------------------
+volumes:
+  webposto-data:
+    driver: local
+    labels:
+      - "com.quality.volume=webposto-data"
+  webposto-logs:
+    driver: local
+    labels:
+      - "com.quality.volume=webposto-logs"
+
+# -----------------------------------------------------------------------------
+# Rede
+# -----------------------------------------------------------------------------
+networks:
+  webposto-network:
+    driver: bridge
+    name: webposto-network
+    labels:
+      - "com.quality.network=webposto"
