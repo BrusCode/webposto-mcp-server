@@ -170,16 +170,22 @@ Para verificar os logs: `docker-compose logs -f`
    cd webposto-mcp-server
    ```
 
-3. **Configure as variáveis de ambiente:**
+3. **Instale as dependências globalmente:**
+   ```powershell
+   pip install requests mcp pydantic pydantic-settings python-dotenv httpx
+   ```
+
+4. **Configure as variáveis de ambiente:**
    ```powershell
    Copy-Item .env.example .env
    notepad .env  # Edite e insira sua chave
    ```
 
-4. **Execute o script de inicialização:**
+5. **Teste o servidor (opcional):**
    ```powershell
-   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
-   .\scripts\start_server.ps1
+   $env:WEBPOSTO_API_KEY="sua-chave-aqui"
+   $env:PYTHONPATH="$PWD"
+   python -m src.server
    ```
 
 ---
@@ -224,7 +230,9 @@ Adicione ao arquivo de configuração do Claude Desktop (`claude_desktop_config.
 }
 ```
 
-> **Importante:** O parâmetro `cwd` não é suportado pelo schema MCP. Use `PYTHONPATH` para indicar o diretório do projeto.
+> **Importante:** 
+> - O parâmetro `cwd` não é suportado pelo schema MCP. Use `PYTHONPATH` para indicar o diretório do projeto.
+> - Certifique-se de que as dependências estão instaladas globalmente: `pip install requests mcp pydantic pydantic-settings python-dotenv httpx`
 
 ---
 
