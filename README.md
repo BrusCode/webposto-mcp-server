@@ -1,6 +1,6 @@
 # WebPosto MCP Server - Quality Automação
 
-![Quality Automação](https://www.qualityautomacao.com.br/assets/img/logo.png)
+![Quality Automação](https://www.webposto.com.br/assets/logos/webposto/logo-wp.webp)
 
 **Versão:** 1.1.0
 
