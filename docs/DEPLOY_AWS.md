@@ -34,6 +34,26 @@ Este modelo é altamente escalável, seguro e com custo otimizado, ideal para am
 
 ---
 
+## Arquitetura Serverless
+```bash
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Cliente MCP   │────▶│  API Gateway    │────▶│  AWS Lambda     │
+│  (Claude, etc)  │     │  (HTTP API v2)  │     │  (Python 3.11)  │
+└─────────────────┘     └─────────────────┘     └────────┬────────┘
+                                                         │
+                        ┌─────────────────┐              │
+                        │ Secrets Manager │◀─────────────┤
+                        │ (API Key)       │              │
+                        └─────────────────┘              │
+                                                         ▼
+                        ┌─────────────────┐     ┌─────────────────┐
+                        │  CloudWatch     │◀────│   WebPosto API  │
+                        │  (Logs/Metrics) │     │                 │
+                        └─────────────────┘     └─────────────────┘
+```
+
+---
+
 ## Pré-requisitos
 
 1. **Conta na AWS:** [Crie uma aqui](https://aws.amazon.com/free/).
