@@ -1,0 +1,162 @@
+# =============================================================================
+# WebPosto MCP Server - AWS SAM Template (v2.0 - Produção)
+# Quality Automação
+# =============================================================================
+#
+# DESCRIÇÃO:
+# Este template AWS SAM (Serverless Application Model) provisiona uma arquitetura
+# serverless completa para o WebPosto MCP Server, utilizando AWS Lambda e
+# Amazon API Gateway (HTTP API).
+#
+# ARQUITETURA:
+#   - API Gateway (HTTP API): Ponto de entrada econômico e de alta performance.
+#   - Lambda Function: Executa o servidor MCP em Python 3.11.
+#   - Secrets Manager: Armazena de forma segura a chave da API do WebPosto.
+#   - CloudWatch: Coleta logs e métricas para monitoramento.
+#
+# =============================================================================
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  (v2.0) Arquitetura serverless para o WebPosto MCP Server, utilizando
+  AWS Lambda, API Gateway e Secrets Manager.
+
+# =============================================================================
+# Parâmetros de Deploy
+# =============================================================================
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    Description: Ambiente de deploy (ex: production, staging).
+
+  WebPostoApiKeySecretName:
+    Type: String
+    Default: "webposto/api/key"
+    Description: >
+      Nome do Secret no AWS Secrets Manager que armazena a chave da API do WebPosto.
+
+  LambdaMemorySize:
+    Type: Number
+    Default: 512
+    Description: Memória (MB) alocada para a função Lambda.
+
+  LambdaTimeout:
+    Type: Number
+    Default: 60
+    Description: Timeout (segundos) da função Lambda.
+
+  LogLevel:
+    Type: String
+    Default: INFO
+    AllowedValues: [DEBUG, INFO, WARNING, ERROR]
+    Description: Nível de log da aplicação.
+
+# =============================================================================
+# Globals - Configurações Padrão para Funções
+# =============================================================================
+Globals:
+  Function:
+    Runtime: python3.11
+    Architectures: [x86_64]
+    MemorySize: !Ref LambdaMemorySize
+    Timeout: !Ref LambdaTimeout
+    Handler: src.lambda_handler.handler
+
+# =============================================================================
+# Recursos da Stack
+# =============================================================================
+Resources:
+
+  # ---------------------------------------------------------------------------
+  # API Gateway (HTTP API v2)
+  # ---------------------------------------------------------------------------
+  WebPostoHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Name: !Sub "webposto-mcp-http-api-${Environment}"
+      Description: API Gateway para o WebPosto MCP Server
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"  # Em produção, restrinja para os domínios do seu cliente
+        AllowMethods:
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 100
+        ThrottlingRateLimit: 50
+
+  # ---------------------------------------------------------------------------
+  # Função Lambda Principal
+  # ---------------------------------------------------------------------------
+  WebPostoMCPFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "webposto-mcp-function-${Environment}"
+      Description: Executa o servidor MCP para integração com o WebPosto.
+      CodeUri: ../
+      Environment:
+        Variables:
+          WEBPOSTO_API_KEY_SECRET_NAME: !Ref WebPostoApiKeySecretName
+          LOG_LEVEL: !Ref LogLevel
+          POWERTOOLS_SERVICE_NAME: "webposto-mcp"
+          POWERTOOLS_METRICS_NAMESPACE: "WebPostoMCP"
+      Events:
+        McpPostEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref WebPostoHttpApi
+            Path: /mcp
+            Method: POST
+      Policies:
+        - SecretsManagerReadPolicy:
+            SecretName: !Ref WebPostoApiKeySecretName
+        - Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/webposto-mcp-function-${Environment}:*"
+      Tags:
+        Project: "WebPostoMCP"
+        Environment: !Ref Environment
+        ManagedBy: "SAM"
+    Metadata:
+      BuildMethod: python3.11
+      SamResourceId: WebPostoMCPFunction
+
+  # ---------------------------------------------------------------------------
+  # Log Group para a Função Lambda
+  # ---------------------------------------------------------------------------
+  WebPostoMCPLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !GetAtt WebPostoMCPFunction.Arn
+      RetentionInDays: 14
+
+# =============================================================================
+# Outputs da Stack
+# =============================================================================
+Outputs:
+  ApiEndpoint:
+    Description: "URL do endpoint da API Gateway para o servidor MCP"
+    Value: !Sub "https://${WebPostoHttpApi}.execute-api.${AWS::Region}.amazonaws.com/mcp"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiEndpoint"
+
+  FunctionName:
+    Description: "Nome da função Lambda criada"
+    Value: !Ref WebPostoMCPFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-FunctionName"
+
+  FunctionArn:
+    Description: "ARN da função Lambda criada"
+    Value: !GetAtt WebPostoMCPFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-FunctionArn"
