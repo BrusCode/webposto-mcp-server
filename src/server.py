@@ -22,7 +22,11 @@ import requests
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from mcp.server.fastmcp import FastMCP
+# Compatibilidade com FastMCP Cloud (pacote fastmcp) e MCP SDK (pacote mcp)
+try:
+    from fastmcp import FastMCP
+except ImportError:
+    from mcp.server.fastmcp import FastMCP
 
 # Configuração de logging
 logging.basicConfig(
@@ -2908,19 +2912,20 @@ def mapa_desempenho(data_inicial: str, data_final: str, funcionario: Optional[li
 
 def main():
     """Ponto de entrada principal do servidor MCP."""
+    # Aviso se API_KEY não estiver configurada (não bloqueia para permitir inspeção)
     if not API_KEY:
-        logger.error("=" * 60)
-        logger.error("ERRO: WEBPOSTO_API_KEY não configurada!")
-        logger.error("Defina a variável de ambiente WEBPOSTO_API_KEY")
-        logger.error("=" * 60)
-        sys.exit(1)
-    
-    logger.info("=" * 60)
-    logger.info("WebPosto MCP Server - Quality Automação v1.2.0")
-    logger.info("=" * 60)
-    logger.info(f"URL Base: {WEBPOSTO_BASE_URL}")
-    logger.info(f"Chave API: {'*' * 8}...{API_KEY[-8:] if len(API_KEY) > 8 else '****'}")
-    logger.info("=" * 60)
+        logger.warning("=" * 60)
+        logger.warning("AVISO: WEBPOSTO_API_KEY não configurada!")
+        logger.warning("As ferramentas não funcionarão sem a chave de API.")
+        logger.warning("Defina a variável de ambiente WEBPOSTO_API_KEY")
+        logger.warning("=" * 60)
+    else:
+        logger.info("=" * 60)
+        logger.info("WebPosto MCP Server - Quality Automação v1.3.0")
+        logger.info("=" * 60)
+        logger.info(f"URL Base: {WEBPOSTO_BASE_URL}")
+        logger.info(f"Chave API: {'*' * 8}...{API_KEY[-8:] if len(API_KEY) > 8 else '****'}")
+        logger.info("=" * 60)
     
     mcp.run()
 

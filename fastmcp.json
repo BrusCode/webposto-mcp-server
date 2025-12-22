@@ -5,7 +5,8 @@
   "source": {
     "type": "filesystem",
     "path": "src/server.py",
-    "entrypoint": "mcp"
+    "entrypoint": "mcp",
+    "object_name": "mcp"
   },
   "environment": {
     "type": "uv",

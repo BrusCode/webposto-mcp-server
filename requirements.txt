@@ -1,8 +1,10 @@
 # WebPosto MCP Server - Dependências
 # Quality Automação
 
-# MCP SDK
-mcp>=1.0.0
+# FastMCP (compatível com FastMCP Cloud)
+# O pacote fastmcp é preferido para deploy no FastMCP Cloud
+# O pacote mcp é usado como fallback para outros ambientes
+fastmcp>=2.0.0
 
 # HTTP Client
 requests>=2.31.0
