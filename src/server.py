@@ -63,11 +63,19 @@ class WebPostoClient:
         self.timeout = 30
     
     def _add_auth_param(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Adiciona o parâmetro de autenticação 'chave' aos parâmetros da requisição."""
+        """Adiciona o parâmetro de autenticação 'chave' aos parâmetros da requisição.
+        
+        A chave é lida dinamicamente do ambiente para garantir que
+        variáveis definidas após a importação do módulo sejam capturadas.
+        """
         if params is None:
             params = {}
-        if API_KEY:
-            params['chave'] = API_KEY
+        # Ler a chave dinamicamente do ambiente
+        api_key = os.getenv('WEBPOSTO_API_KEY', '') or API_KEY
+        if api_key:
+            params['chave'] = api_key
+        else:
+            logger.warning("AVISO: Requisição sem chave de API - WEBPOSTO_API_KEY não configurada")
         return params
     
     def _make_request(
@@ -82,7 +90,10 @@ class WebPostoClient:
         params = self._add_auth_param(params)
         
         try:
+            # Log da URL com parâmetros (sem expor a chave completa)
+            params_log = {k: (v[:8] + '...' if k == 'chave' and v else v) for k, v in params.items()}
             logger.info(f"Requisição {method} para: {url}")
+            logger.debug(f"Parâmetros: {params_log}")
             
             response = requests.request(
                 method=method,
