@@ -1,0 +1,31 @@
+{
+  "$schema": "https://gofastmcp.com/public/schemas/fastmcp.json/v1.json",
+  "name": "webposto-mcp",
+  "description": "Servidor MCP para integração com o sistema WebPosto - Quality Automação",
+  "source": {
+    "type": "filesystem",
+    "path": "src/server.py",
+    "entrypoint": "mcp"
+  },
+  "environment": {
+    "type": "uv",
+    "python": ">=3.10",
+    "dependencies": [
+      "requests>=2.31.0",
+      "mcp>=1.0.0",
+      "fastmcp>=2.0.0",
+      "pydantic>=2.0.0",
+      "pydantic-settings>=2.0.0",
+      "python-dotenv>=1.0.0",
+      "httpx>=0.25.0"
+    ]
+  },
+  "deployment": {
+    "transport": "stdio",
+    "log_level": "INFO",
+    "env": {
+      "WEBPOSTO_URL": "https://web.qualityautomacao.com.br",
+      "WEBPOSTO_API_KEY": "${WEBPOSTO_API_KEY}"
+    }
+  }
+}

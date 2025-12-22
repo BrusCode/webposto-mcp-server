@@ -1,6 +1,6 @@
 # =============================================================================
 # WebPosto MCP Server - Docker Stack para Portainer (Swarm + Traefik)
-# Quality Automação - Versão 2.0
+# Quality Automação - Versão 2.1
 # =============================================================================
 #
 # INSTRUÇÕES DE DEPLOY VIA PORTAINER:
@@ -14,17 +14,17 @@
 #    - WEBPOSTO_API_KEY = sua-chave-api-aqui
 # 7. Clique em "Deploy the stack"
 #
-# URL de acesso: https://mcp.seudominio.com.br/mcp
+# URL de acesso: https://mcp.seudominio.com.br/sse
 #
 # =============================================================================
 
-version: "3.7"
+version: "3.8"
 
 services:
   # ---------------------------------------------------------------------------
   # WebPosto MCP Server - Servidor Principal (HTTP/SSE)
   # ---------------------------------------------------------------------------
-  webposto_mcp:
+  webposto-mcp:
     image: python:3.11-slim
     working_dir: /app
     
@@ -32,21 +32,25 @@ services:
     command: >
       bash -c "
         set -e &&
-        apt-get update -qq && apt-get install -y -qq git --no-install-recommends &&
+        echo '=== Instalando dependências do sistema ===' &&
+        apt-get update -qq && apt-get install -y -qq git curl --no-install-recommends &&
         rm -rf /var/lib/apt/lists/* &&
-        pip install --no-cache-dir -q requests mcp fastmcp pydantic pydantic-settings python-dotenv httpx uvicorn starlette &&
+        echo '=== Instalando dependências Python ===' &&
+        pip install --no-cache-dir -q requests mcp pydantic pydantic-settings python-dotenv httpx uvicorn starlette &&
+        echo '=== Clonando/Atualizando repositório ===' &&
         if [ ! -d /app/repo/.git ]; then
           git clone --depth 1 https://github.com/BrusCode/webposto-mcp-server.git /app/repo
         else
-          cd /app/repo && git pull --ff-only || true
+          cd /app/repo && git fetch origin && git reset --hard origin/main || true
         fi &&
         cd /app/repo &&
+        echo '=== Iniciando servidor MCP ===' &&
         python -m src.server_http
       "
     
     # Rede compartilhada com Traefik
     networks:
-      - wpnet
+      - traefik-public
     
     # Variáveis de ambiente
     environment:
@@ -69,6 +73,12 @@ services:
       # OPCIONAL: Nível de log
       # =====================================================================
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # =====================================================================
+      # Configuração do servidor MCP
+      # =====================================================================
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
       
       # Python
       - PYTHONUNBUFFERED=1
@@ -96,28 +106,33 @@ services:
         reservations:
           cpus: '0.25'
           memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
       labels:
         # Habilitar Traefik
         - traefik.enable=true
         
         # Router principal - HTTPS
-        - traefik.http.routers.webposto_mcp.rule=Host(`mcp.seudominio.com.br`)
-        - traefik.http.routers.webposto_mcp.entrypoints=websecure
-        - traefik.http.routers.webposto_mcp.priority=1
-        - traefik.http.routers.webposto_mcp.tls.certresolver=letsencryptresolver
-        - traefik.http.routers.webposto_mcp.service=webposto_mcp
+        - traefik.http.routers.webposto-mcp.rule=Host(`mcp.qualityautomacao.com.br`)
+        - traefik.http.routers.webposto-mcp.entrypoints=websecure
+        - traefik.http.routers.webposto-mcp.priority=1
+        - traefik.http.routers.webposto-mcp.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.webposto-mcp.service=webposto-mcp
         
         # Serviço - porta interna do container
-        - traefik.http.services.webposto_mcp.loadbalancer.server.port=8000
-        - traefik.http.services.webposto_mcp.loadbalancer.passHostHeader=true
+        - traefik.http.services.webposto-mcp.loadbalancer.server.port=8000
+        - traefik.http.services.webposto-mcp.loadbalancer.passHostHeader=true
     
-    # Health check
+    # Health check - verifica o endpoint /sse
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8000/mcp || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/sse -o /dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 90s
+      start_period: 120s
     
     # Logging
     logging:
@@ -139,6 +154,5 @@ volumes:
 # Rede Externa (mesma do Traefik)
 # -----------------------------------------------------------------------------
 networks:
-  wpnet:
+  traefik-public:
     external: true
-    name: bridge
