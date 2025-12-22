@@ -1,0 +1,144 @@
+# =============================================================================
+# WebPosto MCP Server - Docker Stack para Portainer (Swarm + Traefik)
+# Quality Automação - Versão 2.0
+# =============================================================================
+#
+# INSTRUÇÕES DE DEPLOY VIA PORTAINER:
+# 
+# 1. Acesse o Portainer (ex: https://seu-servidor:9443)
+# 2. Vá em "Stacks" > "Add Stack"
+# 3. Nome: webposto-mcp
+# 4. Build method: "Web editor" ou "Upload"
+# 5. Cole este arquivo ou faça upload
+# 6. Em "Environment variables", adicione:
+#    - WEBPOSTO_API_KEY = sua-chave-api-aqui
+# 7. Clique em "Deploy the stack"
+#
+# URL de acesso: https://mcp.qualityautomacao.com.br/mcp
+#
+# =============================================================================
+
+version: "3.7"
+
+services:
+  # ---------------------------------------------------------------------------
+  # WebPosto MCP Server - Servidor Principal (HTTP/SSE)
+  # ---------------------------------------------------------------------------
+  webposto_mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    
+    # Comando de inicialização otimizado
+    command: >
+      bash -c "
+        set -e &&
+        apt-get update -qq && apt-get install -y -qq git --no-install-recommends &&
+        rm -rf /var/lib/apt/lists/* &&
+        pip install --no-cache-dir -q requests mcp fastmcp pydantic pydantic-settings python-dotenv httpx uvicorn starlette &&
+        if [ ! -d /app/repo/.git ]; then
+          git clone --depth 1 https://github.com/BrusCode/webposto-mcp-server.git /app/repo
+        else
+          cd /app/repo && git pull --ff-only || true
+        fi &&
+        cd /app/repo &&
+        python -m src.server_http
+      "
+    
+    # Rede compartilhada com Traefik
+    networks:
+      - wpnet
+    
+    # Variáveis de ambiente
+    environment:
+      # =====================================================================
+      # OBRIGATÓRIO: Chave de API do WebPosto
+      # =====================================================================
+      - WEBPOSTO_API_KEY=${WEBPOSTO_API_KEY:?Erro: WEBPOSTO_API_KEY é obrigatória}
+      
+      # =====================================================================
+      # OPCIONAL: URL base da API
+      # =====================================================================
+      - WEBPOSTO_URL=${WEBPOSTO_URL:-https://web.qualityautomacao.com.br}
+      
+      # =====================================================================
+      # OPCIONAL: Código da empresa padrão
+      # =====================================================================
+      - WEBPOSTO_EMPRESA_CODIGO=${WEBPOSTO_EMPRESA_CODIGO:-}
+      
+      # =====================================================================
+      # OPCIONAL: Nível de log
+      # =====================================================================
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Python
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/repo
+      
+      # Timezone
+      - TZ=America/Sao_Paulo
+    
+    # Volumes
+    volumes:
+      - webposto-data:/app/repo
+      - webposto-logs:/app/logs
+    
+    # Deploy Swarm
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+      labels:
+        # Habilitar Traefik
+        - traefik.enable=true
+        
+        # Router principal - HTTPS
+        - traefik.http.routers.webposto_mcp.rule=Host(`mcp.qualityautomacao.com.br`)
+        - traefik.http.routers.webposto_mcp.entrypoints=websecure
+        - traefik.http.routers.webposto_mcp.priority=1
+        - traefik.http.routers.webposto_mcp.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.webposto_mcp.service=webposto_mcp
+        
+        # Serviço - porta interna do container
+        - traefik.http.services.webposto_mcp.loadbalancer.server.port=8000
+        - traefik.http.services.webposto_mcp.loadbalancer.passHostHeader=true
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/mcp || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+# -----------------------------------------------------------------------------
+# Volumes Persistentes
+# -----------------------------------------------------------------------------
+volumes:
+  webposto-data:
+    driver: local
+  webposto-logs:
+    driver: local
+
+# -----------------------------------------------------------------------------
+# Rede Externa (mesma do Traefik/n8n)
+# -----------------------------------------------------------------------------
+networks:
+  wpnet:
+    external: true
+    name: wpnet
