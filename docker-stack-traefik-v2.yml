@@ -14,7 +14,7 @@
 #    - WEBPOSTO_API_KEY = sua-chave-api-aqui
 # 7. Clique em "Deploy the stack"
 #
-# URL de acesso: https://mcp.qualityautomacao.com.br/mcp
+# URL de acesso: https://mcp.seudominio.com.br/mcp
 #
 # =============================================================================
 
@@ -101,7 +101,7 @@ services:
         - traefik.enable=true
         
         # Router principal - HTTPS
-        - traefik.http.routers.webposto_mcp.rule=Host(`mcp.qualityautomacao.com.br`)
+        - traefik.http.routers.webposto_mcp.rule=Host(`mcp.seudominio.com.br`)
         - traefik.http.routers.webposto_mcp.entrypoints=websecure
         - traefik.http.routers.webposto_mcp.priority=1
         - traefik.http.routers.webposto_mcp.tls.certresolver=letsencryptresolver
@@ -136,9 +136,9 @@ volumes:
     driver: local
 
 # -----------------------------------------------------------------------------
-# Rede Externa (mesma do Traefik/n8n)
+# Rede Externa (mesma do Traefik)
 # -----------------------------------------------------------------------------
 networks:
   wpnet:
     external: true
-    name: wpnet
+    name: bridge
