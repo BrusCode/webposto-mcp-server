@@ -1806,7 +1806,89 @@ def consultar_funcionario_meta(grupo_meta_codigo: Optional[int] = None, ultimo_c
 
 @mcp.tool()
 def consultar_funcionario(funcionario_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarFuncionario - GET /INTEGRACAO/FUNCIONARIO"""
+    """
+    **Consulta funcionários cadastrados no sistema.**
+
+    Esta tool retorna a lista de funcionários (frentistas, operadores de caixa, gerentes, etc.)
+    cadastrados no sistema. É essencial para obter IDs de funcionários antes de filtrar
+    relatórios de vendas, abastecimentos ou produtividade.
+
+    **Quando usar:**
+    - Para listar funcionários de uma empresa/filial
+    - Para obter ID de funcionário antes de gerar relatórios
+    - Para validação de funcionários em operações
+    - Para relatórios de produtividade por funcionário
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar por empresa.
+    2. **Execute a Consulta:** Chame `consultar_funcionario` com os filtros desejados.
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna funcionários de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `funcionario_codigo` (int, opcional): Código de um funcionário específico.
+      Útil para buscar detalhes de um funcionário conhecido.
+      Exemplo: 123
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último funcionário retornado.
+
+    **Retorno:**
+    Lista de funcionários contendo:
+    - Código do funcionário
+    - Nome completo
+    - CPF
+    - Função/cargo (ex: "Frentista", "Gerente", "Caixa")
+    - Empresa/filial vinculada
+    - Status (ativo/inativo)
+    - Data de admissão
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todos os funcionários de uma empresa
+    funcionarios = consultar_funcionario(
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Buscar um funcionário específico
+    funcionario = consultar_funcionario(
+        funcionario_codigo=123
+    )
+
+    # Cenário 3: Listar frentistas para relatório de produtividade
+    funcionarios = consultar_funcionario(
+        empresa_codigo=7
+    )
+    # Filtrar frentistas (se necessário, filtrar por função no resultado)
+    frentistas = [f for f in funcionarios if "Frentista" in f.get("funcao", "")]
+    frentista_ids = [f["codigo"] for f in frentistas]
+
+    # Usar IDs em relatório de vendas
+    vendas_por_frentista = vendas_periodo(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        filial=[7],
+        funcionario=frentista_ids,
+        tipo_data="FISCAL",
+        ordenacao_por="QUANTIDADE_VENDIDA",
+        cupom_cancelado=False
+    )
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Uso Comum:**
+    Esta tool é frequentemente usada em conjunto com:
+    - `vendas_periodo` (filtrar vendas por funcionário)
+    - `abastecimento` (filtrar abastecimentos por frentista)
+    - Relatórios de produtividade
+
+    **Dica:**
+    Funcionários inativos também são retornados. Verifique o campo `status` se
+    precisar apenas de funcionários ativos.
+    """
     params = {}
     if funcionario_codigo is not None:
         params["funcionarioCodigo"] = funcionario_codigo
@@ -2607,7 +2689,73 @@ def consultar_caixa(data_inicial: str, data_final: str, turno: Optional[int] = N
 
 @mcp.tool()
 def consultar_bomba(bomba_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None) -> str:
-    """consultarBomba - GET /INTEGRACAO/BOMBA"""
+    """
+    **Consulta bombas de combustível cadastradas.**
+
+    Esta tool retorna a lista de bombas de combustível (equipamentos que contêm os bicos
+    de abastecimento) cadastradas no sistema. Cada bomba pode ter múltiplos bicos.
+
+    **Quando usar:**
+    - Para listar bombas de uma empresa/filial
+    - Para obter ID de bomba antes de consultar bicos
+    - Para relatórios de equipamentos
+    - Para manutenção e controle de ativos
+
+    **Hierarquia de Equipamentos:**
+    Tanque → Bomba → Bico (onde o abastecimento acontece)
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_bomba` com os filtros desejados.
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna bombas de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `bomba_codigo` (int, opcional): Código de uma bomba específica.
+      Útil para buscar detalhes de uma bomba conhecida.
+      Exemplo: 1
+
+    **Retorno:**
+    Lista de bombas contendo:
+    - Código da bomba
+    - Descrição/identificação
+    - Empresa/filial
+    - Status (ativa/inativa)
+    - Bicos vinculados
+    - Tanque associado
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todas as bombas de uma empresa
+    bombas = consultar_bomba(
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Buscar uma bomba específica
+    bomba = consultar_bomba(
+        bomba_codigo=1,
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Listar bombas para depois consultar bicos
+    bombas = consultar_bomba(empresa_codigo=7)
+    for bomba in bombas:
+        bomba_id = bomba["codigo"]
+        # Consultar bicos desta bomba
+        bicos = consultar_bico(empresa_codigo=7)
+        bicos_da_bomba = [b for b in bicos if b.get("bombaCodigo") == bomba_id]
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Tools Relacionadas:**
+    - `consultar_bico` - Consulta bicos vinculados às bombas
+    - `consultar_tanque` - Consulta tanques que abastecem as bombas
+    - `abastecimento` - Consulta abastecimentos realizados nos bicos
+    """
     params = {}
     if bomba_codigo is not None:
         params["bombaCodigo"] = bomba_codigo
@@ -2621,7 +2769,88 @@ def consultar_bomba(bomba_codigo: Optional[int] = None, empresa_codigo: Optional
 
 @mcp.tool()
 def consultar_bico(bico_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarBico - GET /INTEGRACAO/BICO"""
+    """
+    **Consulta bicos de abastecimento cadastrados.**
+
+    Esta tool retorna a lista de bicos de abastecimento (pontos onde o combustível é
+    efetivamente abastecido nos veículos) cadastrados no sistema. Cada bico está vinculado
+    a uma bomba e a um produto combustível.
+
+    **Quando usar:**
+    - Para listar bicos de uma empresa/filial
+    - Para obter ID de bico antes de filtrar abastecimentos
+    - Para relatórios de produção por bico
+    - Para controle de equipamentos
+
+    **Hierarquia de Equipamentos:**
+    Tanque → Bomba → **Bico** (onde o abastecimento acontece)
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_bico` com os filtros desejados.
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna bicos de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `bico_codigo` (int, opcional): Código de um bico específico.
+      Útil para buscar detalhes de um bico conhecido.
+      Exemplo: 101
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último bico retornado.
+
+    **Retorno:**
+    Lista de bicos contendo:
+    - Código do bico
+    - Número/identificação do bico
+    - Bomba vinculada
+    - Produto combustível
+    - Empresa/filial
+    - Status (ativo/inativo)
+    - Encerrante (leitura do totalizador)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todos os bicos de uma empresa
+    bicos = consultar_bico(
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Buscar um bico específico
+    bico = consultar_bico(
+        bico_codigo=101,
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Listar bicos de gasolina para relatório
+    bicos = consultar_bico(empresa_codigo=7)
+    # Filtrar por produto (exemplo)
+    bicos_gasolina = [b for b in bicos if "Gasolina" in b.get("produtoDescricao", "")]
+    bico_ids = [b["codigo"] for b in bicos_gasolina]
+
+    # Usar IDs em relatório de abastecimentos
+    abastecimentos = abastecimento(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+    # Filtrar por bicos de gasolina
+    abast_gasolina = [a for a in abastecimentos if a.get("bicoCodigo") in bico_ids]
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Tools Relacionadas:**
+    - `consultar_bomba` - Consulta bombas que contêm os bicos
+    - `consultar_tanque` - Consulta tanques de armazenamento
+    - `abastecimento` - Consulta abastecimentos realizados nos bicos
+
+    **Dica:**
+    Bicos são identificados por número (ex: Bico 1, Bico 2). Use este número para
+    comunicação com usuários finais, mas use o `codigo` para filtros em APIs.
+    """
     params = {}
     if bico_codigo is not None:
         params["bicoCodigo"] = bico_codigo
@@ -2828,7 +3057,67 @@ def cliente_consultar(cnpj_cpf: str) -> str:
 
 @mcp.tool()
 def consultar_produto_combustivel() -> str:
-    """consultarProdutoCombustivel - GET /INTEGRACAO/PEDIDO_COMBUSTIVEL/PRODUTO"""
+    """
+    **Consulta produtos combustíveis disponíveis para pedidos.**
+
+    Esta tool retorna a lista de produtos combustíveis cadastrados no sistema que podem
+    ser utilizados em pedidos de combustível. É específica para o módulo de pedidos e
+    difere de `consultar_produto` que retorna todos os produtos.
+
+    **Quando usar:**
+    - Para listar combustíveis disponíveis para pedidos
+    - Para obter IDs de produtos combustíveis antes de criar pedidos
+    - Para validação de produtos em integrações de pedidos
+
+    **Diferença entre consultar_produto_combustivel e consultar_produto:**
+    - `consultar_produto_combustivel`: Apenas combustíveis do módulo de pedidos (sem parâmetros)
+    - `consultar_produto`: Todos os produtos (combustíveis + loja), permite filtros por empresa
+
+    **Fluxo de Uso Essencial:**
+    1. **Execute a Consulta:** Chame `consultar_produto_combustivel` diretamente.
+    2. **Use os IDs:** Utilize os códigos retornados em operações de pedidos de combustível.
+
+    **Parâmetros:**
+    Esta tool não possui parâmetros. Retorna todos os produtos combustíveis cadastrados.
+
+    **Retorno:**
+    Lista de produtos combustíveis contendo:
+    - Código do produto
+    - Descrição (ex: "Gasolina Comum", "Diesel S10", "Etanol")
+    - Tipo de combustível
+    - Unidade de medida
+    - Status (ativo/inativo)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todos os combustíveis disponíveis
+    combustiveis = consultar_produto_combustivel()
+    print(combustiveis)
+    # Resultado: [{"codigo": 150, "descricao": "Gasolina Comum"}, ...]
+
+    # Cenário 2: Buscar ID de um combustível específico
+    combustiveis = consultar_produto_combustivel()
+    gasolina = next(c for c in combustiveis if "Gasolina" in c["descricao"])
+    gasolina_id = gasolina["codigo"]
+
+    # Cenário 3: Validar se um produto é combustível válido para pedidos
+    combustiveis = consultar_produto_combustivel()
+    ids_validos = [c["codigo"] for c in combustiveis]
+    if produto_id in ids_validos:
+        print("Produto válido para pedido de combustível")
+    ```
+
+    **Dependências:**
+    Nenhuma. Esta tool pode ser chamada diretamente.
+
+    **Uso Recomendado:**
+    - Use esta tool quando trabalhar com o módulo de pedidos de combustível
+    - Para outros casos, use `consultar_produto` com filtro `tipo_produto=["COMBUSTIVEL"]`
+
+    **Dica:**
+    Os IDs retornados aqui são os mesmos usados em `consultar_produto`, mas esta tool
+    é mais rápida por retornar apenas combustíveis.
+    """
     params = {}
 
     result = client.get("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PRODUTO", params=params)
