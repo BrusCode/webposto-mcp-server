@@ -2168,7 +2168,20 @@ def tabela_preco_prazo(tabela_preco_prazo_codigo: Optional[int] = None, ultimo_c
 
 @mcp.tool()
 def consultar_sat(data_inicial: str, data_final: str, empresa_codigo: Optional[list] = None, venda_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, quitado: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, origem: Optional[str] = None) -> str:
-    """consultarSat - GET /INTEGRACAO/SAT"""
+    """
+    **Consulta cupons SAT (Sistema Autenticador e Transmissor).**
+
+    Retorna cupons fiscais SAT emitidos. Usado em SP para vendas no varejo.
+
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, obrigatórios): Período
+    - `empresa_codigo` (list, opcional): Códigos das empresas
+
+    **Exemplo:**
+    ```python
+    sat = consultar_sat("2025-01-01", "2025-01-31")
+    ```
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -2653,7 +2666,20 @@ def consultar_pdv(pdv_referencia: Optional[str] = None, pdv_codigo: Optional[int
 
 @mcp.tool()
 def consultar_nfse(empresa_codigo: Optional[list] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, nfse_codigo: Optional[int] = None, produto_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarNfse - GET /INTEGRACAO/NOTA_SERVICO_ITEM"""
+    """
+    **Consulta itens de NFS-e (Nota Fiscal de Serviço Eletrônica).**
+
+    Retorna itens de notas fiscais de serviço.
+
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, opcional): Período
+    - `nfse_codigo` (int, opcional): Código da NFS-e
+
+    **Exemplo:**
+    ```python
+    itens = consultar_nfse(data_inicial="2025-01-01", data_final="2025-01-31")
+    ```
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -2677,7 +2703,21 @@ def consultar_nfse(empresa_codigo: Optional[list] = None, data_inicial: Optional
 
 @mcp.tool()
 def consultar_nfse_1(empresa_codigo: Optional[list] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, fornecedor_codigo: Optional[int] = None, cliente_codigo: Optional[int] = None, nfse_codigo: Optional[int] = None, rps: Optional[str] = None, tipo_nota: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarNfse_1 - GET /INTEGRACAO/NOTA_SERVICO"""
+    """
+    **Consulta NFS-e (Nota Fiscal de Serviço Eletrônica).**
+
+    Retorna notas fiscais de serviço emitidas ou recebidas.
+
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, opcional): Período
+    - `tipo_nota` (str, opcional): "E" (Entrada) ou "S" (Saída)
+    - `cliente_codigo`, `fornecedor_codigo` (int, opcional): Filtros
+
+    **Exemplo:**
+    ```python
+    nfse = consultar_nfse_1(data_inicial="2025-01-01", data_final="2025-01-31", tipo_nota="S")
+    ```
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -2707,7 +2747,20 @@ def consultar_nfse_1(empresa_codigo: Optional[list] = None, data_inicial: Option
 
 @mcp.tool()
 def consultar_nota_saida_item(data_inicial: Optional[str] = None, data_final: Optional[str] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, nota_codigo: Optional[int] = None, nota_item_codigo: Optional[int] = None) -> str:
-    """consultarNotaSaidaItem - GET /INTEGRACAO/NOTA_SAIDA_ITEM"""
+    """
+    **Consulta itens de notas de saída.**
+
+    Retorna itens detalhados de notas fiscais de saída.
+
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, opcional): Período
+    - `nota_codigo` (int, opcional): Código da nota
+
+    **Exemplo:**
+    ```python
+    itens = consultar_nota_saida_item(nota_codigo=123)
+    ```
+    """
     params = {}
     if data_inicial is not None:
         params["dataInicial"] = data_inicial
@@ -2755,7 +2808,21 @@ def consultar_nota_manifestacao(data_inicial: Optional[str] = None, data_final: 
 
 @mcp.tool()
 def consultar_nfe_saida(data_inicial: str, data_final: str, chave_documento: Optional[str] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, situacao: Optional[str] = None, numero_documento: Optional[str] = None, serie_documento: Optional[str] = None, nota_codigo: Optional[list] = None, gerou_venda: Optional[bool] = None) -> str:
-    """consultarNfeSaida - GET /INTEGRACAO/NFE_SAIDA"""
+    """
+    **Consulta NF-e de Saída (Nota Fiscal Eletrônica).**
+
+    Retorna NF-e de saída emitidas. Usado para vendas e transferências.
+
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, obrigatórios): Período
+    - `chave_documento` (str, opcional): Chave de acesso da NF-e
+    - `situacao` (str, opcional): "A", "C", "I"
+
+    **Exemplo:**
+    ```python
+    nfe = consultar_nfe_saida("2025-01-01", "2025-01-31")
+    ```
+    """
     params = {}
     if chave_documento is not None:
         params["chaveDocumento"] = chave_documento
@@ -2787,7 +2854,21 @@ def consultar_nfe_saida(data_inicial: str, data_final: str, chave_documento: Opt
 
 @mcp.tool()
 def consulta_nfe_xml(id: Optional[int] = None, modelo_documento: Optional[int] = None, numero_documento: Optional[int] = None, empresa_codigo: Optional[int] = None, serie_documento: Optional[int] = None, situacao: Optional[str] = None) -> str:
-    """consultaNfeXml - GET /INTEGRACAO/NFE/XML"""
+    """
+    **Obtém XML de NF-e.**
+
+    Retorna o arquivo XML de uma NF-e específica.
+
+    **Parâmetros:**
+    - `numero_documento` (int): Número da nota
+    - `empresa_codigo` (int): Código da empresa
+    - `serie_documento` (int): Série da nota
+
+    **Exemplo:**
+    ```python
+    xml = consulta_nfe_xml(numero_documento=123, empresa_codigo=7, serie_documento=1)
+    ```
+    """
     params = {}
     if id is not None:
         params["id"] = id
@@ -2809,7 +2890,21 @@ def consulta_nfe_xml(id: Optional[int] = None, modelo_documento: Optional[int] =
 
 @mcp.tool()
 def consultar_nfce(data_inicial: str, data_final: str, empresa_codigo: Optional[list] = None, venda_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, situacao: Optional[str] = None) -> str:
-    """consultarNfce - GET /INTEGRACAO/NFCE"""
+    """
+    **Consulta NFC-e (Nota Fiscal de Consumidor Eletrônica).**
+
+    Retorna NFC-e emitidas no período. Usado para vendas no varejo.
+
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, obrigatórios): Período (YYYY-MM-DD)
+    - `empresa_codigo` (list, opcional): Códigos das empresas
+    - `situacao` (str, opcional): "A" (Autorizada), "C" (Cancelada)
+
+    **Exemplo:**
+    ```python
+    nfce = consultar_nfce("2025-01-01", "2025-01-31", situacao="A")
+    ```
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
