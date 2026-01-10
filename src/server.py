@@ -638,7 +638,55 @@ def consultar_titulo_receber(data_inicial: str, data_final: str, turno: Optional
 
 @mcp.tool()
 def incluir_titulo_receber(dados: Dict[str, Any]) -> str:
-    """incluirTituloReceber - POST /INTEGRACAO/TITULO_RECEBER"""
+    """
+    **Cria um novo título a receber.**
+
+    Esta tool permite criar manualmente um título a receber (duplicata, cheque, etc.)
+    no sistema. É útil para lançamentos manuais ou integrações externas.
+
+    **Quando usar:**
+    - Para criar títulos de vendas externas
+    - Para lançamentos manuais de contas a receber
+    - Para integrações com outros sistemas
+
+    **Fluxo de Uso Essencial:**
+    1. **Prepare os Dados:** Monte o objeto com informações do título.
+    2. **Crie o Título:** Chame `incluir_titulo_receber` com os dados.
+
+    **Parâmetros (via objeto `dados`):**
+    - `clienteCodigo` (int, obrigatório): Código do cliente.
+      Obter via: `consultar_cliente`
+    - `valorOriginal` (float, obrigatório): Valor do título.
+    - `dataEmissao` (str, obrigatório): Data de emissão (YYYY-MM-DD).
+    - `dataVencimento` (str, obrigatório): Data de vencimento (YYYY-MM-DD).
+    - `numeroDuplicata` (str, opcional): Número da duplicata.
+    - `observacao` (str, opcional): Observações.
+    - `empresaCodigo` (int, opcional): Código da empresa.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Criar título a receber
+    resultado = incluir_titulo_receber(
+        dados={
+            "clienteCodigo": 123,
+            "valorOriginal": 1500.00,
+            "dataEmissao": "2025-01-10",
+            "dataVencimento": "2025-02-10",
+            "numeroDuplicata": "DUP-001",
+            "observacao": "Venda externa - Pedido #456",
+            "empresaCodigo": 7
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_cliente` (para obter clienteCodigo)
+    - Opcional: `consultar_empresas` (para obter empresaCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_titulo_receber` - Consultar títulos criados
+    - `receber_titulo` - Registrar recebimento
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/TITULO_RECEBER", data=dados, params=params)
@@ -788,7 +836,58 @@ def consultar_titulo_pagar(data_inicial: Optional[str] = None, data_final: Optio
 
 @mcp.tool()
 def incluir_titulo_pagar(dados: Dict[str, Any]) -> str:
-    """incluirTituloPagar - POST /INTEGRACAO/TITULO_PAGAR"""
+    """
+    **Cria um novo título a pagar.**
+
+    Esta tool permite criar manualmente um título a pagar (boleto, nota fiscal, despesa)
+    no sistema. É útil para lançamentos manuais ou integrações externas.
+
+    **Quando usar:**
+    - Para criar títulos de compras externas
+    - Para lançamentos manuais de contas a pagar
+    - Para despesas operacionais
+    - Para integrações com outros sistemas
+
+    **Fluxo de Uso Essencial:**
+    1. **Prepare os Dados:** Monte o objeto com informações do título.
+    2. **Crie o Título:** Chame `incluir_titulo_pagar` com os dados.
+
+    **Parâmetros (via objeto `dados`):**
+    - `fornecedorCodigo` (int, obrigatório): Código do fornecedor.
+      Obter via: `consultar_fornecedor`
+    - `valorOriginal` (float, obrigatório): Valor do título.
+    - `dataEmissao` (str, obrigatório): Data de emissão (YYYY-MM-DD).
+    - `dataVencimento` (str, obrigatório): Data de vencimento (YYYY-MM-DD).
+    - `numeroDocumento` (str, opcional): Número do documento/nota.
+    - `linhaDigitavel` (str, opcional): Linha digitável do boleto.
+    - `observacao` (str, opcional): Observações.
+    - `empresaCodigo` (int, opcional): Código da empresa.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Criar título a pagar
+    resultado = incluir_titulo_pagar(
+        dados={
+            "fornecedorCodigo": 456,
+            "valorOriginal": 5000.00,
+            "dataEmissao": "2025-01-10",
+            "dataVencimento": "2025-02-10",
+            "numeroDocumento": "NF-123456",
+            "linhaDigitavel": "34191.79001 01043.510047 91020.150008 1 96610000005000",
+            "observacao": "Compra de combustível",
+            "empresaCodigo": 7
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_fornecedor` (para obter fornecedorCodigo)
+    - Opcional: `consultar_empresas` (para obter empresaCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_titulo_pagar` - Consultar títulos criados
+    - `consultar_fornecedor` - Consultar fornecedores
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/TITULO_PAGAR", data=dados, params=params)
@@ -821,7 +920,56 @@ def reajustar_produto(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def produto_inventario(dados: Dict[str, Any]) -> str:
-    """produtoInventario - POST /INTEGRACAO/PRODUTO_INVENTARIO"""
+    """
+    **Registra inventário de produto (contagem de estoque).**
+
+    Esta tool permite registrar contagens de estoque (inventário) para ajustar o estoque
+    do sistema com a contagem física. É essencial para controle de estoque e auditoria.
+
+    **Quando usar:**
+    - Para registrar contagens de inventário
+    - Para ajustar estoque após contagem física
+    - Para auditoria de estoque
+    - Para conciliação de diferenças
+
+    **Fluxo de Uso Essencial:**
+    1. **Realize a Contagem Física:** Conte os produtos no estoque.
+    2. **Registre o Inventário:** Chame `produto_inventario` com os dados da contagem.
+
+    **Parâmetros (via objeto `dados`):**
+    - `produtoCodigo` (int, obrigatório): Código do produto.
+      Obter via: `consultar_produto`
+    - `quantidadeContada` (float, obrigatório): Quantidade contada fisicamente.
+    - `dataContagem` (str, obrigatório): Data da contagem (YYYY-MM-DD).
+    - `empresaCodigo` (int, opcional): Código da empresa.
+    - `observacao` (str, opcional): Observações sobre a contagem.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Registrar inventário de produto
+    resultado = produto_inventario(
+        dados={
+            "produtoCodigo": 789,
+            "quantidadeContada": 150.5,
+            "dataContagem": "2025-01-10",
+            "empresaCodigo": 7,
+            "observacao": "Inventário mensal - Janeiro/2025"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_produto` (para obter produtoCodigo)
+    - Opcional: `consultar_empresas` (para obter empresaCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_produto_estoque` - Consultar estoque atual
+    - `reajustar_estoque_produto_combustivel` - Ajustar estoque de combustíveis
+
+    **Dica:**
+    O sistema calculará automaticamente a diferença entre o estoque sistemático e a
+    contagem física, gerando os ajustes necessários.
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/PRODUTO_INVENTARIO", data=dados, params=params)
