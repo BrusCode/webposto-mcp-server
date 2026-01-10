@@ -1805,7 +1805,20 @@ def consultar_venda_item(empresa_codigo: Optional[int] = None, usa_produto_lmc: 
 
 @mcp.tool()
 def consultar_venda_forma_pagamento(turno: Optional[int] = None, empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, modelo_documento: Optional[str] = None, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, venda_codigo: Optional[list] = None, situacao: Optional[str] = None, vendas_com_dfe: Optional[bool] = None) -> str:
-    """consultarVendaFormaPagamento - GET /INTEGRACAO/VENDA_FORMA_PAGAMENTO"""
+    """
+    **Consulta formas de pagamento usadas em vendas.**
+
+    Retorna detalhes de pagamentos recebidos nas vendas (dinheiro, cartão, PIX, etc.).
+
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, opcional): Período
+    - `empresa_codigo` (int, opcional): Código da empresa
+
+    **Exemplo:**
+    ```python
+    pagamentos = consultar_venda_forma_pagamento(data_inicial="2025-01-01", data_final="2025-01-31")
+    ```
+    """
     params = {}
     if turno is not None:
         params["turno"] = turno
@@ -2209,7 +2222,20 @@ def consultar_sat(data_inicial: str, data_final: str, empresa_codigo: Optional[l
 
 @mcp.tool()
 def sangria_caixa(data_inicial: Optional[str] = None, data_final: Optional[str] = None, data_hora_atualizacao: Optional[str] = None, empresa_codigo: Optional[int] = None, caixa_codigo: Optional[int] = None, funcionario_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """sangriaCaixa - GET /INTEGRACAO/SANGRIA_CAIXA"""
+    """
+    **Consulta sangrias de caixa.**
+
+    Retorna retiradas de dinheiro do caixa (sangrias) realizadas.
+
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, opcional): Período
+    - `caixa_codigo` (int, opcional): Código do caixa
+
+    **Exemplo:**
+    ```python
+    sangrias = sangria_caixa(data_inicial="2025-01-10", data_final="2025-01-10")
+    ```
+    """
     params = {}
     if data_inicial is not None:
         params["dataInicial"] = data_inicial
@@ -4045,7 +4071,21 @@ def consultar_caixa_apresentado(data_inicial: str, data_final: str, data_hora_at
 
 @mcp.tool()
 def consultar_caixa(data_inicial: str, data_final: str, turno: Optional[int] = None, empresa_codigo: Optional[int] = None, individual: Optional[bool] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarCaixa - GET /INTEGRACAO/CAIXA"""
+    """
+    **Consulta caixas (fechamentos de caixa).**
+
+    Retorna informações de fechamento de caixa por período.
+
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, obrigatórios): Período
+    - `empresa_codigo` (int, opcional): Código da empresa
+    - `turno` (int, opcional): Número do turno
+
+    **Exemplo:**
+    ```python
+    caixas = consultar_caixa("2025-01-01", "2025-01-31")
+    ```
+    """
     params = {}
     if data_inicial is not None:
         params["dataInicial"] = data_inicial
