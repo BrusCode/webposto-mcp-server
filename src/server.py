@@ -195,7 +195,66 @@ def receber_titulo_convertido(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def receber_titulo(dados: Dict[str, Any]) -> str:
-    """receberTitulo - PUT /INTEGRACAO/RECEBER_TITULO"""
+    """
+    **Registra o recebimento de um título a receber.**
+
+    Esta tool permite baixar/quitar um título a receber, registrando o pagamento efetivo
+    do cliente. É essencial para gestão de contas a receber e fluxo de caixa.
+
+    **Quando usar:**
+    - Para registrar recebimento de duplicatas
+    - Para baixar títulos após confirmação de pagamento
+    - Para conciliação bancária
+    - Para atualização de saldo de clientes
+
+    **Fluxo de Uso Essencial:**
+    1. **Consulte o Título:** Use `consultar_titulo_receber` para obter o código do título.
+    2. **Registre o Recebimento:** Chame `receber_titulo` com os dados do recebimento.
+
+    **Parâmetros (via objeto `dados`):**
+    - `tituloCodigo` (int, obrigatório): Código do título a receber.
+      Obter via: `consultar_titulo_receber`
+    - `dataRecebimento` (str, obrigatório): Data do recebimento (YYYY-MM-DD).
+    - `valorRecebido` (float, obrigatório): Valor efetivamente recebido.
+    - `formaPagamento` (str, obrigatório): Forma de pagamento.
+      Valores: "D" (Dinheiro), "C" (Cheque), "T" (Transferência), "P" (PIX),
+      "CC" (Cartão Crédito), "CD" (Cartão Débito)
+    - `contaBancariaCodigo` (int, opcional): Código da conta bancária de destino.
+    - `observacao` (str, opcional): Observações sobre o recebimento.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Receber título em dinheiro
+    resultado = receber_titulo(
+        dados={
+            "tituloCodigo": 12345,
+            "dataRecebimento": "2025-01-10",
+            "valorRecebido": 1500.50,
+            "formaPagamento": "D"  # Dinheiro
+        }
+    )
+
+    # Cenário 2: Receber título via PIX
+    resultado = receber_titulo(
+        dados={
+            "tituloCodigo": 12346,
+            "dataRecebimento": "2025-01-10",
+            "valorRecebido": 2500.00,
+            "formaPagamento": "P",  # PIX
+            "contaBancariaCodigo": 1,
+            "observacao": "Recebido via PIX - Comprovante #123"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_titulo_receber` (para obter tituloCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_titulo_receber` - Consultar títulos para receber
+    - `receber_cheque` - Receber especificamente cheques
+    - `receber_cartoes` - Receber especificamente cartões
+    """
     endpoint = f"/INTEGRACAO/RECEBER_TITULO"
     params = {}
 
@@ -207,7 +266,72 @@ def receber_titulo(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def receber_cheque(dados: Dict[str, Any], empresa_codigo: Optional[int] = None) -> str:
-    """receberCheque - PUT /INTEGRACAO/RECEBER_CHEQUE"""
+    """
+    **Registra o recebimento de cheque.**
+
+    Esta tool permite registrar o recebimento de pagamentos via cheque, incluindo
+    cheques pré-datados. É específica para controle de cheques recebidos.
+
+    **Quando usar:**
+    - Para registrar recebimento de cheques
+    - Para controle de cheques pré-datados
+    - Para conciliação bancária de cheques
+
+    **Fluxo de Uso Essencial:**
+    1. **Consulte o Título:** Use `consultar_titulo_receber` para obter informações.
+    2. **Registre o Cheque:** Chame `receber_cheque` com os dados do cheque.
+
+    **Parâmetros:**
+    - `dados` (Dict, obrigatório): Objeto com dados do cheque:
+      * `tituloCodigo` (int): Código do título
+      * `dataRecebimento` (str): Data do recebimento (YYYY-MM-DD)
+      * `valorRecebido` (float): Valor do cheque
+      * `numeroCheque` (str): Número do cheque
+      * `banco` (str): Código do banco
+      * `agencia` (str): Número da agência
+      * `conta` (str): Número da conta
+      * `dataBomPara` (str, opcional): Data de bom para (cheque pré-datado)
+    - `empresa_codigo` (int, opcional): Código da empresa.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Receber cheque à vista
+    resultado = receber_cheque(
+        dados={
+            "tituloCodigo": 12345,
+            "dataRecebimento": "2025-01-10",
+            "valorRecebido": 1500.00,
+            "numeroCheque": "000123",
+            "banco": "001",  # Banco do Brasil
+            "agencia": "1234",
+            "conta": "56789-0"
+        },
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Receber cheque pré-datado
+    resultado = receber_cheque(
+        dados={
+            "tituloCodigo": 12346,
+            "dataRecebimento": "2025-01-10",
+            "valorRecebido": 2500.00,
+            "numeroCheque": "000124",
+            "banco": "237",  # Bradesco
+            "agencia": "5678",
+            "conta": "12345-6",
+            "dataBomPara": "2025-02-10"  # Pré-datado para 10/02
+        },
+        empresa_codigo=7
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_titulo_receber` (para obter tituloCodigo)
+
+    **Tools Relacionadas:**
+    - `receber_titulo` - Receber títulos em geral
+    - `consultar_titulo_receber` - Consultar títulos
+    """
     endpoint = f"/INTEGRACAO/RECEBER_CHEQUE"
     params = {}
     if empresa_codigo is not None:
@@ -220,7 +344,73 @@ def receber_cheque(dados: Dict[str, Any], empresa_codigo: Optional[int] = None) 
 
 @mcp.tool()
 def receber_cartoes(dados: Dict[str, Any]) -> str:
-    """receberCartoes - PUT /INTEGRACAO/RECEBER_CARTAO"""
+    """
+    **Registra o recebimento via cartão de crédito/débito.**
+
+    Esta tool permite registrar o recebimento de pagamentos via cartão, incluindo
+    informações da administradora e autorização.
+
+    **Quando usar:**
+    - Para registrar recebimentos via cartão
+    - Para controle de transações com administradoras
+    - Para conciliação de recebíveis de cartões
+
+    **Fluxo de Uso Essencial:**
+    1. **Consulte o Título:** Use `consultar_titulo_receber` para obter informações.
+    2. **Registre o Cartão:** Chame `receber_cartoes` com os dados da transação.
+
+    **Parâmetros (via objeto `dados`):**
+    - `tituloCodigo` (int, obrigatório): Código do título a receber.
+    - `dataRecebimento` (str, obrigatório): Data do recebimento (YYYY-MM-DD).
+    - `valorRecebido` (float, obrigatório): Valor da transação.
+    - `tipoCartao` (str, obrigatório): Tipo do cartão.
+      Valores: "CC" (Crédito), "CD" (Débito)
+    - `administradoraCodigo` (int, obrigatório): Código da administradora.
+    - `numeroAutorizacao` (str, opcional): Número de autorização da transação.
+    - `numeroParcelas` (int, opcional): Número de parcelas (para crédito).
+    - `nsu` (str, opcional): NSU da transação.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Receber via cartão de débito
+    resultado = receber_cartoes(
+        dados={
+            "tituloCodigo": 12345,
+            "dataRecebimento": "2025-01-10",
+            "valorRecebido": 1500.00,
+            "tipoCartao": "CD",  # Débito
+            "administradoraCodigo": 1,  # Ex: Cielo
+            "numeroAutorizacao": "123456",
+            "nsu": "789012"
+        }
+    )
+
+    # Cenário 2: Receber via cartão de crédito parcelado
+    resultado = receber_cartoes(
+        dados={
+            "tituloCodigo": 12346,
+            "dataRecebimento": "2025-01-10",
+            "valorRecebido": 3000.00,
+            "tipoCartao": "CC",  # Crédito
+            "administradoraCodigo": 2,  # Ex: Rede
+            "numeroAutorizacao": "654321",
+            "numeroParcelas": 3,  # 3x sem juros
+            "nsu": "345678"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_titulo_receber` (para obter tituloCodigo)
+
+    **Tools Relacionadas:**
+    - `receber_titulo` - Receber títulos em geral
+    - `consultar_titulo_receber` - Consultar títulos
+
+    **Dica:**
+    Para cartões de crédito parcelados, o sistema pode gerar múltiplos títulos
+    a receber (um por parcela) automaticamente.
+    """
     endpoint = f"/INTEGRACAO/RECEBER_CARTAO"
     params = {}
 
