@@ -3631,7 +3631,121 @@ def consultar_adiantamento_fornecedor(data_inicial: str, data_final: str, fornec
 
 @mcp.tool()
 def consultar_abastecimento(data_inicial: str, data_final: str, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarAbastecimento - GET /INTEGRACAO/ABASTECIMENTO"""
+    """
+    **Consulta abastecimentos realizados na pista.**
+
+    Esta tool retorna todos os abastecimentos de combustível realizados na pista do posto.
+    É uma das tools mais importantes para análise de vendas de combustíveis, controle de
+    estoque e performance de frentistas.
+
+    **Quando usar:**
+    - Para relatórios de abastecimentos
+    - Para análise de vendas de combustível
+    - Para controle de performance de frentistas
+    - Para conciliação de estoque vs vendas
+    - Para auditoria de operações da pista
+
+    **Fluxo de Uso Essencial:**
+    1. **Execute a Consulta:** Chame `consultar_abastecimento` com o período desejado.
+    2. **Analise os Dados:** Use os dados para relatórios e análises.
+
+    **Parâmetros:**
+    - `data_inicial` (str, obrigatório): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, obrigatório): Data de fim no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `tipo_data` (str, opcional): Tipo de data para filtro.
+      Valores: "FISCAL" ou "MOVIMENTO"
+      Default: "FISCAL"
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último abastecimento.
+
+    **Retorno:**
+    Lista de abastecimentos contendo:
+    - Código do abastecimento
+    - Data e hora
+    - Bico utilizado
+    - Bomba
+    - Produto combustível (Gasolina, Diesel, Etanol, etc.)
+    - Quantidade (litros)
+    - Preço unitário (por litro)
+    - Valor total
+    - Frentista responsável
+    - Placa do veículo (se informada)
+    - Cliente (se identificado)
+    - Forma de pagamento
+    - Empresa/filial
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar abastecimentos do dia
+    abastecimentos = consultar_abastecimento(
+        data_inicial="2025-01-10",
+        data_final="2025-01-10"
+    )
+
+    # Cenário 2: Relatório mensal de abastecimentos
+    abastecimentos = consultar_abastecimento(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        tipo_data="FISCAL"
+    )
+
+    # Cenário 3: Análise por produto
+    abastecimentos = consultar_abastecimento(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31"
+    )
+    
+    # Agrupar por produto
+    from collections import defaultdict
+    vendas_por_produto = defaultdict(lambda: {"litros": 0, "valor": 0})
+    
+    for abast in abastecimentos:
+        produto = abast["produtoDescricao"]
+        vendas_por_produto[produto]["litros"] += abast["quantidade"]
+        vendas_por_produto[produto]["valor"] += abast["valorTotal"]
+    
+    # Mostrar resultados
+    for produto, dados in vendas_por_produto.items():
+        print(f"{produto}: {dados['litros']:.2f}L - R$ {dados['valor']:.2f}")
+
+    # Cenário 4: Performance de frentistas
+    abastecimentos = consultar_abastecimento(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31"
+    )
+    
+    vendas_por_frentista = defaultdict(lambda: {"quantidade": 0, "valor": 0})
+    
+    for abast in abastecimentos:
+        frentista = abast.get("frentistaNome", "Não identificado")
+        vendas_por_frentista[frentista]["quantidade"] += 1
+        vendas_por_frentista[frentista]["valor"] += abast["valorTotal"]
+    
+    # Ranking de frentistas
+    ranking = sorted(
+        vendas_por_frentista.items(),
+        key=lambda x: x[1]["valor"],
+        reverse=True
+    )
+    ```
+
+    **Dependências:**
+    Nenhuma. Esta tool pode ser chamada diretamente.
+
+    **Tools Relacionadas:**
+    - `consultar_bico` - Consultar bicos de abastecimento
+    - `consultar_bomba` - Consultar bombas
+    - `consultar_produto_combustivel` - Consultar produtos combustíveis
+    - `consultar_funcionario` - Consultar frentistas
+    - `vendas_periodo` - Relatório agregado de vendas (inclui abastecimentos)
+
+    **Dica:**
+    Esta tool retorna dados transacionais detalhados. Para relatórios agregados e
+    análises complexas, considere usar `vendas_periodo` que é mais rápido e oferece
+    múltiplos agrupamentos.
+    """
     params = {}
     if data_inicial is not None:
         params["dataInicial"] = data_inicial
