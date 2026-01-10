@@ -195,7 +195,66 @@ def receber_titulo_convertido(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def receber_titulo(dados: Dict[str, Any]) -> str:
-    """receberTitulo - PUT /INTEGRACAO/RECEBER_TITULO"""
+    """
+    **Registra o recebimento de um título a receber.**
+
+    Esta tool permite baixar/quitar um título a receber, registrando o pagamento efetivo
+    do cliente. É essencial para gestão de contas a receber e fluxo de caixa.
+
+    **Quando usar:**
+    - Para registrar recebimento de duplicatas
+    - Para baixar títulos após confirmação de pagamento
+    - Para conciliação bancária
+    - Para atualização de saldo de clientes
+
+    **Fluxo de Uso Essencial:**
+    1. **Consulte o Título:** Use `consultar_titulo_receber` para obter o código do título.
+    2. **Registre o Recebimento:** Chame `receber_titulo` com os dados do recebimento.
+
+    **Parâmetros (via objeto `dados`):**
+    - `tituloCodigo` (int, obrigatório): Código do título a receber.
+      Obter via: `consultar_titulo_receber`
+    - `dataRecebimento` (str, obrigatório): Data do recebimento (YYYY-MM-DD).
+    - `valorRecebido` (float, obrigatório): Valor efetivamente recebido.
+    - `formaPagamento` (str, obrigatório): Forma de pagamento.
+      Valores: "D" (Dinheiro), "C" (Cheque), "T" (Transferência), "P" (PIX),
+      "CC" (Cartão Crédito), "CD" (Cartão Débito)
+    - `contaBancariaCodigo` (int, opcional): Código da conta bancária de destino.
+    - `observacao` (str, opcional): Observações sobre o recebimento.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Receber título em dinheiro
+    resultado = receber_titulo(
+        dados={
+            "tituloCodigo": 12345,
+            "dataRecebimento": "2025-01-10",
+            "valorRecebido": 1500.50,
+            "formaPagamento": "D"  # Dinheiro
+        }
+    )
+
+    # Cenário 2: Receber título via PIX
+    resultado = receber_titulo(
+        dados={
+            "tituloCodigo": 12346,
+            "dataRecebimento": "2025-01-10",
+            "valorRecebido": 2500.00,
+            "formaPagamento": "P",  # PIX
+            "contaBancariaCodigo": 1,
+            "observacao": "Recebido via PIX - Comprovante #123"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_titulo_receber` (para obter tituloCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_titulo_receber` - Consultar títulos para receber
+    - `receber_cheque` - Receber especificamente cheques
+    - `receber_cartoes` - Receber especificamente cartões
+    """
     endpoint = f"/INTEGRACAO/RECEBER_TITULO"
     params = {}
 
@@ -207,7 +266,72 @@ def receber_titulo(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def receber_cheque(dados: Dict[str, Any], empresa_codigo: Optional[int] = None) -> str:
-    """receberCheque - PUT /INTEGRACAO/RECEBER_CHEQUE"""
+    """
+    **Registra o recebimento de cheque.**
+
+    Esta tool permite registrar o recebimento de pagamentos via cheque, incluindo
+    cheques pré-datados. É específica para controle de cheques recebidos.
+
+    **Quando usar:**
+    - Para registrar recebimento de cheques
+    - Para controle de cheques pré-datados
+    - Para conciliação bancária de cheques
+
+    **Fluxo de Uso Essencial:**
+    1. **Consulte o Título:** Use `consultar_titulo_receber` para obter informações.
+    2. **Registre o Cheque:** Chame `receber_cheque` com os dados do cheque.
+
+    **Parâmetros:**
+    - `dados` (Dict, obrigatório): Objeto com dados do cheque:
+      * `tituloCodigo` (int): Código do título
+      * `dataRecebimento` (str): Data do recebimento (YYYY-MM-DD)
+      * `valorRecebido` (float): Valor do cheque
+      * `numeroCheque` (str): Número do cheque
+      * `banco` (str): Código do banco
+      * `agencia` (str): Número da agência
+      * `conta` (str): Número da conta
+      * `dataBomPara` (str, opcional): Data de bom para (cheque pré-datado)
+    - `empresa_codigo` (int, opcional): Código da empresa.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Receber cheque à vista
+    resultado = receber_cheque(
+        dados={
+            "tituloCodigo": 12345,
+            "dataRecebimento": "2025-01-10",
+            "valorRecebido": 1500.00,
+            "numeroCheque": "000123",
+            "banco": "001",  # Banco do Brasil
+            "agencia": "1234",
+            "conta": "56789-0"
+        },
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Receber cheque pré-datado
+    resultado = receber_cheque(
+        dados={
+            "tituloCodigo": 12346,
+            "dataRecebimento": "2025-01-10",
+            "valorRecebido": 2500.00,
+            "numeroCheque": "000124",
+            "banco": "237",  # Bradesco
+            "agencia": "5678",
+            "conta": "12345-6",
+            "dataBomPara": "2025-02-10"  # Pré-datado para 10/02
+        },
+        empresa_codigo=7
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_titulo_receber` (para obter tituloCodigo)
+
+    **Tools Relacionadas:**
+    - `receber_titulo` - Receber títulos em geral
+    - `consultar_titulo_receber` - Consultar títulos
+    """
     endpoint = f"/INTEGRACAO/RECEBER_CHEQUE"
     params = {}
     if empresa_codigo is not None:
@@ -220,7 +344,73 @@ def receber_cheque(dados: Dict[str, Any], empresa_codigo: Optional[int] = None) 
 
 @mcp.tool()
 def receber_cartoes(dados: Dict[str, Any]) -> str:
-    """receberCartoes - PUT /INTEGRACAO/RECEBER_CARTAO"""
+    """
+    **Registra o recebimento via cartão de crédito/débito.**
+
+    Esta tool permite registrar o recebimento de pagamentos via cartão, incluindo
+    informações da administradora e autorização.
+
+    **Quando usar:**
+    - Para registrar recebimentos via cartão
+    - Para controle de transações com administradoras
+    - Para conciliação de recebíveis de cartões
+
+    **Fluxo de Uso Essencial:**
+    1. **Consulte o Título:** Use `consultar_titulo_receber` para obter informações.
+    2. **Registre o Cartão:** Chame `receber_cartoes` com os dados da transação.
+
+    **Parâmetros (via objeto `dados`):**
+    - `tituloCodigo` (int, obrigatório): Código do título a receber.
+    - `dataRecebimento` (str, obrigatório): Data do recebimento (YYYY-MM-DD).
+    - `valorRecebido` (float, obrigatório): Valor da transação.
+    - `tipoCartao` (str, obrigatório): Tipo do cartão.
+      Valores: "CC" (Crédito), "CD" (Débito)
+    - `administradoraCodigo` (int, obrigatório): Código da administradora.
+    - `numeroAutorizacao` (str, opcional): Número de autorização da transação.
+    - `numeroParcelas` (int, opcional): Número de parcelas (para crédito).
+    - `nsu` (str, opcional): NSU da transação.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Receber via cartão de débito
+    resultado = receber_cartoes(
+        dados={
+            "tituloCodigo": 12345,
+            "dataRecebimento": "2025-01-10",
+            "valorRecebido": 1500.00,
+            "tipoCartao": "CD",  # Débito
+            "administradoraCodigo": 1,  # Ex: Cielo
+            "numeroAutorizacao": "123456",
+            "nsu": "789012"
+        }
+    )
+
+    # Cenário 2: Receber via cartão de crédito parcelado
+    resultado = receber_cartoes(
+        dados={
+            "tituloCodigo": 12346,
+            "dataRecebimento": "2025-01-10",
+            "valorRecebido": 3000.00,
+            "tipoCartao": "CC",  # Crédito
+            "administradoraCodigo": 2,  # Ex: Rede
+            "numeroAutorizacao": "654321",
+            "numeroParcelas": 3,  # 3x sem juros
+            "nsu": "345678"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_titulo_receber` (para obter tituloCodigo)
+
+    **Tools Relacionadas:**
+    - `receber_titulo` - Receber títulos em geral
+    - `consultar_titulo_receber` - Consultar títulos
+
+    **Dica:**
+    Para cartões de crédito parcelados, o sistema pode gerar múltiplos títulos
+    a receber (um por parcela) automaticamente.
+    """
     endpoint = f"/INTEGRACAO/RECEBER_CARTAO"
     params = {}
 
@@ -232,7 +422,41 @@ def receber_cartoes(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def reajustar_estoque_produto_combustivel(dados: Dict[str, Any]) -> str:
-    """reajustarEstoqueProdutoCombustivel - PUT /INTEGRACAO/REAJUSTAR_ESTOQUE_PRODUTO_COMBUSTIVEL"""
+    """
+    **Reajusta estoque de produto combustível.**
+
+    Esta tool permite ajustar manualmente o estoque de produtos combustíveis (gasolina,
+    diesel, etanol, etc.). É específica para combustíveis e considera tanques.
+
+    **Quando usar:**
+    - Para ajustar estoque após medição de tanques
+    - Para correções de estoque de combustíveis
+    - Para lançar perdas ou ganhos
+
+    **Parâmetros (via objeto `dados`):**
+    - `produtoCodigo` (int): Código do produto combustível
+    - `tanqueCodigo` (int): Código do tanque
+    - `quantidadeAjuste` (float): Quantidade a ajustar (positivo ou negativo)
+    - `dataAjuste` (str): Data do ajuste (YYYY-MM-DD)
+    - `motivo` (str): Motivo do ajuste
+
+    **Exemplo:**
+    ```python
+    reajustar_estoque_produto_combustivel(
+        dados={
+            "produtoCodigo": 1,
+            "tanqueCodigo": 1,
+            "quantidadeAjuste": -50.5,  # Perda de 50.5 litros
+            "dataAjuste": "2025-01-10",
+            "motivo": "Evaporáção"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - `consultar_produto_combustivel` (para obter produtoCodigo)
+    - `consultar_tanque` (para obter tanqueCodigo)
+    """
     endpoint = f"/INTEGRACAO/REAJUSTAR_ESTOQUE_PRODUTO_COMBUSTIVEL"
     params = {}
 
@@ -281,7 +505,27 @@ def alterar_produto(id: str, dados: Dict[str, Any], empresa_codigo: Optional[int
 
 @mcp.tool()
 def consultar_transferencia_bancaria(data_inicial: str, data_final: str, empresa_codigo: Optional[int] = None, venda_codigo: Optional[int] = None, tipo_inclusao: Optional[int] = None, conta_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarTransferenciaBancaria - GET /INTEGRACAO/TRANSFERENCIA_BANCARIA"""
+    """
+    **Consulta transferências bancárias.**
+
+    Esta tool retorna transferências bancárias registradas no sistema.
+
+    **Parâmetros:**
+    - `data_inicial` (str, obrigatório): Data inicial (YYYY-MM-DD)
+    - `data_final` (str, obrigatório): Data final (YYYY-MM-DD)
+    - `empresa_codigo` (int, opcional): Código da empresa
+    - `conta_codigo` (int, opcional): Código da conta bancária
+    - `venda_codigo` (int, opcional): Código da venda relacionada
+
+    **Exemplo:**
+    ```python
+    transferencias = consultar_transferencia_bancaria(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+    ```
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -318,7 +562,103 @@ def incluir_transferencia(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def consultar_titulo_receber(data_inicial: str, data_final: str, turno: Optional[int] = None, empresa_codigo: Optional[int] = None, data_hora_atualizacao: Optional[str] = None, apenas_pendente: Optional[bool] = None, codigo_duplicata: Optional[int] = None, data_filtro: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, convertido: Optional[bool] = None, venda_codigo: Optional[list] = None) -> str:
-    """consultarTituloReceber - GET /INTEGRACAO/TITULO_RECEBER"""
+    """
+    **Consulta títulos a receber (contas a receber).**
+
+    Esta tool retorna títulos financeiros a receber, como duplicatas, cheques pré-datados,
+    cartões a receber, etc. É essencial para gestão de contas a receber e fluxo de caixa.
+
+    **Quando usar:**
+    - Para listar títulos pendentes de recebimento
+    - Para acompanhamento de inadimplência
+    - Para relatórios de contas a receber
+    - Para conciliação financeira
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_titulo_receber` com período e filtros.
+
+    **Parâmetros Principais:**
+    - `data_inicial` (str, obrigatório): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, obrigatório): Data de fim no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (int, opcional): Código da empresa/filial.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `apenas_pendente` (bool, opcional): Se True, retorna apenas títulos não recebidos.
+      Muito útil para gestão de inadimplência.
+      Exemplo: True
+    - `data_filtro` (str, opcional): Tipo de data para filtro.
+      Valores: "VENCIMENTO", "EMISSAO", "RECEBIMENTO"
+      Default: "VENCIMENTO"
+    - `venda_codigo` (List[int], opcional): Filtrar por vendas específicas.
+      Obter via: `consultar_venda`
+    - `convertido` (bool, opcional): Filtrar títulos convertidos.
+    - `codigo_duplicata` (int, opcional): Código de duplicata específica.
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+
+    **Retorno:**
+    Lista de títulos a receber contendo:
+    - Código do título
+    - Número da duplicata
+    - Cliente
+    - Valor original
+    - Valor recebido
+    - Saldo pendente
+    - Data de emissão
+    - Data de vencimento
+    - Data de recebimento (se recebido)
+    - Situação (pendente/recebido/cancelado)
+    - Empresa/filial
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar títulos pendentes (inadimplência)
+    pendentes = consultar_titulo_receber(
+        data_inicial="2025-01-01",
+        data_final="2025-01-10",
+        empresa_codigo=7,
+        apenas_pendente=True,
+        data_filtro="VENCIMENTO"
+    )
+
+    # Cenário 2: Listar todos os títulos do mês
+    titulos = consultar_titulo_receber(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Relatório de inadimplência
+    import datetime
+    hoje = datetime.date.today()
+    vencidos = consultar_titulo_receber(
+        data_inicial="2024-01-01",
+        data_final=hoje.strftime("%Y-%m-%d"),
+        empresa_codigo=7,
+        apenas_pendente=True,
+        data_filtro="VENCIMENTO"
+    )
+    
+    total_vencido = sum(t["saldoPendente"] for t in vencidos)
+    print(f"Total vencido: R$ {total_vencido:,.2f}")
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+    - Opcional: `consultar_venda` (para obter venda_codigo)
+
+    **Tools Relacionadas:**
+    - `receber_titulo` - Registrar recebimento de título
+    - `incluir_titulo_receber` - Criar novo título a receber
+    - `consultar_venda` - Consultar vendas que geraram títulos
+
+    **Dica:**
+    Use `apenas_pendente=True` com `data_filtro="VENCIMENTO"` para relatórios de
+    inadimplência e cobrança.
+    """
     params = {}
     if turno is not None:
         params["turno"] = turno
@@ -352,7 +692,55 @@ def consultar_titulo_receber(data_inicial: str, data_final: str, turno: Optional
 
 @mcp.tool()
 def incluir_titulo_receber(dados: Dict[str, Any]) -> str:
-    """incluirTituloReceber - POST /INTEGRACAO/TITULO_RECEBER"""
+    """
+    **Cria um novo título a receber.**
+
+    Esta tool permite criar manualmente um título a receber (duplicata, cheque, etc.)
+    no sistema. É útil para lançamentos manuais ou integrações externas.
+
+    **Quando usar:**
+    - Para criar títulos de vendas externas
+    - Para lançamentos manuais de contas a receber
+    - Para integrações com outros sistemas
+
+    **Fluxo de Uso Essencial:**
+    1. **Prepare os Dados:** Monte o objeto com informações do título.
+    2. **Crie o Título:** Chame `incluir_titulo_receber` com os dados.
+
+    **Parâmetros (via objeto `dados`):**
+    - `clienteCodigo` (int, obrigatório): Código do cliente.
+      Obter via: `consultar_cliente`
+    - `valorOriginal` (float, obrigatório): Valor do título.
+    - `dataEmissao` (str, obrigatório): Data de emissão (YYYY-MM-DD).
+    - `dataVencimento` (str, obrigatório): Data de vencimento (YYYY-MM-DD).
+    - `numeroDuplicata` (str, opcional): Número da duplicata.
+    - `observacao` (str, opcional): Observações.
+    - `empresaCodigo` (int, opcional): Código da empresa.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Criar título a receber
+    resultado = incluir_titulo_receber(
+        dados={
+            "clienteCodigo": 123,
+            "valorOriginal": 1500.00,
+            "dataEmissao": "2025-01-10",
+            "dataVencimento": "2025-02-10",
+            "numeroDuplicata": "DUP-001",
+            "observacao": "Venda externa - Pedido #456",
+            "empresaCodigo": 7
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_cliente` (para obter clienteCodigo)
+    - Opcional: `consultar_empresas` (para obter empresaCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_titulo_receber` - Consultar títulos criados
+    - `receber_titulo` - Registrar recebimento
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/TITULO_RECEBER", data=dados, params=params)
@@ -363,7 +751,108 @@ def incluir_titulo_receber(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def consultar_titulo_pagar(data_inicial: Optional[str] = None, data_final: Optional[str] = None, data_hora_atualizacao: Optional[str] = None, apenas_pendente: Optional[bool] = None, data_filtro: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, empresa_codigo: Optional[int] = None, nota_entrada_codigo: Optional[int] = None, titulo_pagar_codigo: Optional[int] = None, fornecedor_codigo: Optional[int] = None, linha_digitavel: Optional[str] = None, autorizado: Optional[bool] = None, tipo_lancamento: Optional[str] = None) -> str:
-    """consultarTituloPagar - GET /INTEGRACAO/TITULO_PAGAR"""
+    """
+    **Consulta títulos a pagar (contas a pagar).**
+
+    Esta tool retorna títulos financeiros a pagar, como boletos de fornecedores, notas
+    fiscais a pagar, despesas operacionais, etc. É essencial para gestão de contas a
+    pagar e fluxo de caixa.
+
+    **Quando usar:**
+    - Para listar títulos pendentes de pagamento
+    - Para planejamento de fluxo de caixa
+    - Para relatórios de contas a pagar
+    - Para conciliação financeira com fornecedores
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_titulo_pagar` com período e filtros.
+
+    **Parâmetros Principais:**
+    - `data_inicial` (str, opcional): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, opcional): Data de fim no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (int, opcional): Código da empresa/filial.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `apenas_pendente` (bool, opcional): Se True, retorna apenas títulos não pagos.
+      Muito útil para gestão de contas a pagar.
+      Exemplo: True
+    - `data_filtro` (str, opcional): Tipo de data para filtro.
+      Valores: "VENCIMENTO", "EMISSAO", "PAGAMENTO"
+      Default: "VENCIMENTO"
+    - `fornecedor_codigo` (int, opcional): Filtrar por fornecedor específico.
+      Obter via: `consultar_fornecedor`
+    - `nota_entrada_codigo` (int, opcional): Filtrar por nota fiscal de entrada.
+    - `linha_digitavel` (str, opcional): Buscar por linha digitável de boleto.
+    - `autorizado` (bool, opcional): Filtrar títulos autorizados para pagamento.
+    - `tipo_lancamento` (str, opcional): Tipo de lançamento.
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+
+    **Retorno:**
+    Lista de títulos a pagar contendo:
+    - Código do título
+    - Número do documento
+    - Fornecedor
+    - Valor original
+    - Valor pago
+    - Saldo pendente
+    - Data de emissão
+    - Data de vencimento
+    - Data de pagamento (se pago)
+    - Situação (pendente/pago/cancelado)
+    - Linha digitável (se boleto)
+    - Empresa/filial
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar títulos pendentes a vencer
+    pendentes = consultar_titulo_pagar(
+        data_inicial="2025-01-10",
+        data_final="2025-01-31",
+        empresa_codigo=7,
+        apenas_pendente=True,
+        data_filtro="VENCIMENTO"
+    )
+
+    # Cenário 2: Listar todos os pagamentos do mês
+    titulos = consultar_titulo_pagar(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Fluxo de caixa - títulos a vencer nos próximos 7 dias
+    import datetime
+    hoje = datetime.date.today()
+    proximos_7_dias = hoje + datetime.timedelta(days=7)
+    
+    a_vencer = consultar_titulo_pagar(
+        data_inicial=hoje.strftime("%Y-%m-%d"),
+        data_final=proximos_7_dias.strftime("%Y-%m-%d"),
+        empresa_codigo=7,
+        apenas_pendente=True,
+        data_filtro="VENCIMENTO"
+    )
+    
+    total_a_pagar = sum(t["saldoPendente"] for t in a_vencer)
+    print(f"A pagar nos próximos 7 dias: R$ {total_a_pagar:,.2f}")
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+    - Opcional: `consultar_fornecedor` (para obter fornecedor_codigo)
+
+    **Tools Relacionadas:**
+    - `incluir_titulo_pagar` - Criar novo título a pagar
+    - `consultar_fornecedor` - Consultar fornecedores
+
+    **Dica:**
+    Use `apenas_pendente=True` com `data_filtro="VENCIMENTO"` para planejamento de
+    fluxo de caixa e gestão de pagamentos.
+    """
     params = {}
     if data_inicial is not None:
         params["dataInicial"] = data_inicial
@@ -401,7 +890,58 @@ def consultar_titulo_pagar(data_inicial: Optional[str] = None, data_final: Optio
 
 @mcp.tool()
 def incluir_titulo_pagar(dados: Dict[str, Any]) -> str:
-    """incluirTituloPagar - POST /INTEGRACAO/TITULO_PAGAR"""
+    """
+    **Cria um novo título a pagar.**
+
+    Esta tool permite criar manualmente um título a pagar (boleto, nota fiscal, despesa)
+    no sistema. É útil para lançamentos manuais ou integrações externas.
+
+    **Quando usar:**
+    - Para criar títulos de compras externas
+    - Para lançamentos manuais de contas a pagar
+    - Para despesas operacionais
+    - Para integrações com outros sistemas
+
+    **Fluxo de Uso Essencial:**
+    1. **Prepare os Dados:** Monte o objeto com informações do título.
+    2. **Crie o Título:** Chame `incluir_titulo_pagar` com os dados.
+
+    **Parâmetros (via objeto `dados`):**
+    - `fornecedorCodigo` (int, obrigatório): Código do fornecedor.
+      Obter via: `consultar_fornecedor`
+    - `valorOriginal` (float, obrigatório): Valor do título.
+    - `dataEmissao` (str, obrigatório): Data de emissão (YYYY-MM-DD).
+    - `dataVencimento` (str, obrigatório): Data de vencimento (YYYY-MM-DD).
+    - `numeroDocumento` (str, opcional): Número do documento/nota.
+    - `linhaDigitavel` (str, opcional): Linha digitável do boleto.
+    - `observacao` (str, opcional): Observações.
+    - `empresaCodigo` (int, opcional): Código da empresa.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Criar título a pagar
+    resultado = incluir_titulo_pagar(
+        dados={
+            "fornecedorCodigo": 456,
+            "valorOriginal": 5000.00,
+            "dataEmissao": "2025-01-10",
+            "dataVencimento": "2025-02-10",
+            "numeroDocumento": "NF-123456",
+            "linhaDigitavel": "34191.79001 01043.510047 91020.150008 1 96610000005000",
+            "observacao": "Compra de combustível",
+            "empresaCodigo": 7
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_fornecedor` (para obter fornecedorCodigo)
+    - Opcional: `consultar_empresas` (para obter empresaCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_titulo_pagar` - Consultar títulos criados
+    - `consultar_fornecedor` - Consultar fornecedores
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/TITULO_PAGAR", data=dados, params=params)
@@ -434,7 +974,56 @@ def reajustar_produto(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def produto_inventario(dados: Dict[str, Any]) -> str:
-    """produtoInventario - POST /INTEGRACAO/PRODUTO_INVENTARIO"""
+    """
+    **Registra inventário de produto (contagem de estoque).**
+
+    Esta tool permite registrar contagens de estoque (inventário) para ajustar o estoque
+    do sistema com a contagem física. É essencial para controle de estoque e auditoria.
+
+    **Quando usar:**
+    - Para registrar contagens de inventário
+    - Para ajustar estoque após contagem física
+    - Para auditoria de estoque
+    - Para conciliação de diferenças
+
+    **Fluxo de Uso Essencial:**
+    1. **Realize a Contagem Física:** Conte os produtos no estoque.
+    2. **Registre o Inventário:** Chame `produto_inventario` com os dados da contagem.
+
+    **Parâmetros (via objeto `dados`):**
+    - `produtoCodigo` (int, obrigatório): Código do produto.
+      Obter via: `consultar_produto`
+    - `quantidadeContada` (float, obrigatório): Quantidade contada fisicamente.
+    - `dataContagem` (str, obrigatório): Data da contagem (YYYY-MM-DD).
+    - `empresaCodigo` (int, opcional): Código da empresa.
+    - `observacao` (str, opcional): Observações sobre a contagem.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Registrar inventário de produto
+    resultado = produto_inventario(
+        dados={
+            "produtoCodigo": 789,
+            "quantidadeContada": 150.5,
+            "dataContagem": "2025-01-10",
+            "empresaCodigo": 7,
+            "observacao": "Inventário mensal - Janeiro/2025"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_produto` (para obter produtoCodigo)
+    - Opcional: `consultar_empresas` (para obter empresaCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_produto_estoque` - Consultar estoque atual
+    - `reajustar_estoque_produto_combustivel` - Ajustar estoque de combustíveis
+
+    **Dica:**
+    O sistema calculará automaticamente a diferença entre o estoque sistemático e a
+    contagem física, gerando os ajustes necessários.
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/PRODUTO_INVENTARIO", data=dados, params=params)
@@ -530,7 +1119,27 @@ def incluir_cliente_1(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def consultar_movimento_conta(empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, mostra_saldo: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, documento_origem_codigo: Optional[int] = None, tipo_documento_origem: Optional[str] = None) -> str:
-    """consultarMovimentoConta - GET /INTEGRACAO/MOVIMENTO_CONTA"""
+    """
+    **Consulta movimentações de contas bancárias.**
+
+    Esta tool retorna movimentações (entradas e saídas) de contas bancárias.
+
+    **Parâmetros:**
+    - `data_inicial` (str, opcional): Data inicial (YYYY-MM-DD)
+    - `data_final` (str, opcional): Data final (YYYY-MM-DD)
+    - `empresa_codigo` (int, opcional): Código da empresa
+    - `mostra_saldo` (bool, opcional): Se True, mostra saldo
+
+    **Exemplo:**
+    ```python
+    movimentos = consultar_movimento_conta(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7,
+        mostra_saldo=True
+    )
+    ```
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -558,7 +1167,31 @@ def consultar_movimento_conta(empresa_codigo: Optional[int] = None, data_inicial
 
 @mcp.tool()
 def incluir_movimento_conta(dados: Dict[str, Any]) -> str:
-    """incluirMovimentoConta - POST /INTEGRACAO/MOVIMENTO_CONTA"""
+    """
+    **Cria uma nova movimentação de conta bancária.**
+
+    Esta tool permite registrar manualmente movimentações bancárias (entradas/saídas).
+
+    **Parâmetros (via objeto `dados`):**
+    - `contaCodigo` (int): Código da conta bancária
+    - `dataMovimento` (str): Data da movimentação (YYYY-MM-DD)
+    - `tipoMovimento` (str): "E" (Entrada) ou "S" (Saída)
+    - `valor` (float): Valor da movimentação
+    - `historico` (str): Descrição da movimentação
+
+    **Exemplo:**
+    ```python
+    incluir_movimento_conta(
+        dados={
+            "contaCodigo": 1,
+            "dataMovimento": "2025-01-10",
+            "tipoMovimento": "E",
+            "valor": 5000.00,
+            "historico": "Depósito - Recebimento de cliente"
+        }
+    )
+    ```
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/MOVIMENTO_CONTA", data=dados, params=params)
@@ -569,7 +1202,28 @@ def incluir_movimento_conta(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def consultar_lancamento_contabil(data_inicial: str, data_final: str, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, lote_contabil: Optional[int] = None) -> str:
-    """consultarLancamentoContabil - GET /INTEGRACAO/LANCAMENTO_CONTABIL"""
+    """
+    **Consulta lançamentos contábeis.**
+
+    Esta tool retorna lançamentos contábeis registrados no sistema. É usada para
+    integrações contábeis e relatórios financeiros.
+
+    **Parâmetros:**
+    - `data_inicial` (str, obrigatório): Data inicial (YYYY-MM-DD)
+    - `data_final` (str, obrigatório): Data final (YYYY-MM-DD)
+    - `empresa_codigo` (int, opcional): Código da empresa
+    - `lote_contabil` (int, opcional): Número do lote contábil
+    - `limite` (int, opcional): Número máximo de registros
+
+    **Exemplo:**
+    ```python
+    lancamentos = consultar_lancamento_contabil(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+    ```
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -591,7 +1245,31 @@ def consultar_lancamento_contabil(data_inicial: str, data_final: str, empresa_co
 
 @mcp.tool()
 def incluir_lancamento_contabil(dados: Dict[str, Any]) -> str:
-    """incluirLancamentoContabil - POST /INTEGRACAO/LANCAMENTO_CONTABIL"""
+    """
+    **Cria um novo lançamento contábil.**
+
+    Esta tool permite criar lançamentos contábeis manualmente no sistema.
+
+    **Parâmetros (via objeto `dados`):**
+    - `dataLancamento` (str): Data do lançamento (YYYY-MM-DD)
+    - `historico` (str): Histórico do lançamento
+    - `valor` (float): Valor do lançamento
+    - `contaDebito` (int): Código da conta de débito
+    - `contaCredito` (int): Código da conta de crédito
+
+    **Exemplo:**
+    ```python
+    incluir_lancamento_contabil(
+        dados={
+            "dataLancamento": "2025-01-10",
+            "historico": "Pagamento de fornecedor",
+            "valor": 5000.00,
+            "contaDebito": 101,
+            "contaCredito": 201
+        }
+    )
+    ```
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/LANCAMENTO_CONTABIL", data=dados, params=params)
@@ -602,7 +1280,32 @@ def incluir_lancamento_contabil(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def incluir_produto(dados: Dict[str, Any], empresa_codigo: Optional[int] = None) -> str:
-    """incluirProduto - POST /INTEGRACAO/INCLUIR_PRODUTO"""
+    """
+    **Cria um novo produto.**
+
+    Esta tool permite cadastrar um novo produto no sistema.
+
+    **Parâmetros:**
+    - `dados` (Dict): Objeto com dados do produto:
+      * `descricao` (str): Descrição do produto
+      * `codigoBarras` (str, opcional): Código de barras
+      * `preco` (float): Preço de venda
+      * `grupoCodigo` (int): Código do grupo
+    - `empresa_codigo` (int, opcional): Código da empresa
+
+    **Exemplo:**
+    ```python
+    incluir_produto(
+        dados={
+            "descricao": "Refrigerante 2L",
+            "codigoBarras": "7891234567890",
+            "preco": 8.50,
+            "grupoCodigo": 10
+        },
+        empresa_codigo=7
+    )
+    ```
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -819,7 +1522,83 @@ def alterar_cartao(id: str, dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def venda_resumo(empresa_codigo: Optional[list] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, situacao: Optional[str] = None) -> str:
-    """vendaResumo - GET /INTEGRACAO/VENDA_RESUMO"""
+    """
+    **Consulta resumo agregado de vendas por empresa.**
+
+    Esta tool retorna dados totalizados de vendas, agrupados por empresa/filial.
+    É ideal para visão geral e comparação rápida entre filiais.
+
+    **Diferença entre venda_resumo e consultar_venda:**
+    - `venda_resumo`: Retorna dados agregados/totalizados por empresa (mais rápido)
+    - `consultar_venda`: Retorna dados detalhados de cada venda individual (mais completo)
+
+    **Quando usar:**
+    - Para obter totais de vendas por filial rapidamente
+    - Para comparação de performance entre empresas
+    - Para dashboards e relatórios executivos
+    - Quando não precisa de detalhes de cada transação
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha IDs das Empresas (Opcional):** Use `consultar_empresas` se quiser filtrar
+       empresas específicas.
+    2. **Execute a Consulta:** Chame `venda_resumo` com o período desejado.
+
+    **Parâmetros:**
+    - `data_inicial` (str, opcional): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, opcional): Data de fim no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (List[int], opcional): Lista de códigos de empresas para filtrar.
+      Se não informado, retorna resumo de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: [7, 8, 9]
+    - `situacao` (str, opcional): Situação das vendas para filtrar.
+      Valores válidos:
+      * "A" - Ativo/Aberto
+      * "F" - Finalizado
+      * "C" - Cancelado
+      Exemplo: "F"
+
+    **Retorno:**
+    Resumo agregado por empresa contendo:
+    - Código da empresa
+    - Nome da empresa
+    - Quantidade total de vendas
+    - Valor total vendido
+    - Ticket médio
+    - Período consultado
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Resumo de vendas do dia de todas as empresas
+    resumo = venda_resumo(
+        data_inicial="2025-01-10",
+        data_final="2025-01-10"
+    )
+
+    # Cenário 2: Resumo de vendas finalizadas de empresas específicas
+    resumo = venda_resumo(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=[7, 8],
+        situacao="F"
+    )
+
+    # Cenário 3: Comparar performance de filiais no mês
+    resumo_mes = venda_resumo(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31"
+    )
+    # Resultado permite comparação rápida entre filiais
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Dica de Performance:**
+    Use `venda_resumo` quando precisar apenas de totais. É muito mais rápido que
+    `consultar_venda` para grandes volumes de dados.
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -857,7 +1636,122 @@ def consultar_item_fidelidade(venda_item_voucher_codigo: Optional[int] = None, v
 
 @mcp.tool()
 def consultar_venda_item(empresa_codigo: Optional[int] = None, usa_produto_lmc: Optional[bool] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, venda_codigo: Optional[list] = None) -> str:
-    """consultarVendaItem - GET /INTEGRACAO/VENDA_ITEM"""
+    """
+    **Consulta itens individuais de vendas.**
+
+    Esta tool retorna os itens (produtos) vendidos em cada transação, permitindo análise
+    detalhada de quais produtos foram vendidos, em que quantidade, preço e valor total.
+    É essencial para relatórios de produtos mais vendidos e análise de mix de produtos.
+
+    **Diferença entre consultar_venda e consultar_venda_item:**
+    - `consultar_venda`: Retorna cabeçalho das vendas (data, cliente, total)
+    - `consultar_venda_item`: Retorna itens/produtos de cada venda (detalhamento)
+
+    **Quando usar:**
+    - Para análise de produtos vendidos
+    - Para relatórios de itens mais vendidos
+    - Para auditoria de preços praticados
+    - Para conciliação de estoque com vendas
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Consulte Vendas (Opcional):** Use `consultar_venda` para obter códigos de vendas.
+    3. **Execute a Consulta:** Chame `consultar_venda_item` com filtros desejados.
+
+    **Parâmetros:**
+    - `data_inicial` (str, opcional): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, opcional): Data de fim no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `venda_codigo` (List[int], opcional): Lista de códigos de vendas específicas.
+      Útil para buscar itens de vendas conhecidas.
+      Obter via: `consultar_venda`
+      Exemplo: [12345, 12346]
+    - `tipo_data` (str, opcional): Tipo de data para filtro.
+      Valores: "FISCAL" ou "MOVIMENTO"
+      Default: "FISCAL"
+    - `usa_produto_lmc` (bool, opcional): Se True, usa código LMC do produto.
+      Exemplo: False
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último item retornado.
+
+    **Retorno:**
+    Lista de itens de venda contendo:
+    - Código do item
+    - Código da venda (cabeçalho)
+    - Código do produto
+    - Descrição do produto
+    - Quantidade vendida
+    - Preço unitário
+    - Valor total do item
+    - Desconto aplicado
+    - Data da venda
+    - Empresa/filial
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar todos os itens vendidos no dia
+    itens = consultar_venda_item(
+        data_inicial="2025-01-10",
+        data_final="2025-01-10",
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Consultar itens de vendas específicas
+    # Primeiro, obter vendas
+    vendas = consultar_venda(
+        data_inicial="2025-01-10",
+        data_final="2025-01-10",
+        empresa_codigo=7
+    )
+    venda_ids = [v["codigo"] for v in vendas[:5]]  # Primeiras 5 vendas
+    
+    # Depois, obter itens dessas vendas
+    itens = consultar_venda_item(
+        venda_codigo=venda_ids,
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Análise de produtos mais vendidos
+    itens = consultar_venda_item(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+    
+    # Agrupar por produto
+    from collections import defaultdict
+    vendas_por_produto = defaultdict(lambda: {"quantidade": 0, "valor": 0})
+    
+    for item in itens:
+        produto = item["produtoDescricao"]
+        vendas_por_produto[produto]["quantidade"] += item["quantidade"]
+        vendas_por_produto[produto]["valor"] += item["valorTotal"]
+    
+    # Ordenar por quantidade
+    top_produtos = sorted(
+        vendas_por_produto.items(),
+        key=lambda x: x[1]["quantidade"],
+        reverse=True
+    )[:10]
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+    - Opcional: `consultar_venda` (para obter venda_codigo)
+
+    **Tools Relacionadas:**
+    - `consultar_venda` - Consulta cabeçalho das vendas
+    - `vendas_periodo` - Relatório agregado de vendas
+    - `consultar_produto` - Consulta detalhes dos produtos
+
+    **Dica:**
+    Esta tool é ideal para análises detalhadas de produtos vendidos. Para relatórios
+    agregados, use `vendas_periodo` que é mais rápido.
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -915,7 +1809,94 @@ def consultar_venda_forma_pagamento(turno: Optional[int] = None, empresa_codigo:
 
 @mcp.tool()
 def consultar_venda(turno: Optional[int] = None, empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, modelo_documento: Optional[str] = None, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, venda_codigo: Optional[list] = None, situacao: Optional[str] = None, vendas_com_dfe: Optional[bool] = None) -> str:
-    """consultarVenda - GET /INTEGRACAO/VENDA"""
+    """
+    **Consulta vendas realizadas no período especificado.**
+
+    Esta tool retorna todas as vendas (abastecimentos e produtos da loja de conveniência)
+    realizadas em uma ou mais empresas/filiais do posto. É ideal para consultas detalhadas
+    de transações individuais.
+
+    **Diferença entre consultar_venda e venda_resumo:**
+    - `consultar_venda`: Retorna dados detalhados de cada venda individual
+    - `venda_resumo`: Retorna dados agregados/totalizados por empresa
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa:** Use `consultar_empresas` para obter o `empresaCodigo`.
+    2. **Execute a Consulta:** Chame `consultar_venda` com o período e filtros desejados.
+
+    **Parâmetros Principais:**
+    - `data_inicial` (str, opcional): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, opcional): Data de fim no formato YYYY-MM-DD.
+      Deve ser maior ou igual a data_inicial.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna vendas de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `situacao` (str, opcional): Situação da venda para filtrar.
+      Valores válidos:
+      * "A" - Ativo/Aberto (venda em andamento)
+      * "F" - Finalizado (venda concluída)
+      * "C" - Cancelado (venda cancelada)
+      Se não informado, retorna todas as situações.
+      Exemplo: "F"
+    - `tipo_data` (str, opcional): Tipo de data para filtro.
+      Valores: "FISCAL" ou "MOVIMENTO"
+      Default: "FISCAL"
+    - `turno` (int, opcional): Filtrar por turno específico.
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código da última venda retornada.
+
+    **Retorno:**
+    Lista de vendas com informações detalhadas:
+    - Código da venda
+    - Data e hora
+    - Valor total
+    - Situação
+    - Empresa/filial
+    - Cliente (se houver)
+    - Itens da venda
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar vendas do dia atual de todas as empresas
+    vendas = consultar_venda(
+        data_inicial="2025-01-10",
+        data_final="2025-01-10"
+    )
+
+    # Cenário 2: Consultar vendas finalizadas de uma empresa específica
+    vendas = consultar_venda(
+        data_inicial="2025-01-01",
+        data_final="2025-01-10",
+        empresa_codigo=7,
+        situacao="F"
+    )
+
+    # Cenário 3: Consultar vendas com paginação
+    primeira_pagina = consultar_venda(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        limite=100
+    )
+    # Obter próxima página
+    segunda_pagina = consultar_venda(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        limite=100,
+        ultimo_codigo=primeira_pagina[-1]["codigo"]
+    )
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Erros Comuns:**
+    - Erro se data_inicial > data_final
+    - Erro se empresa_codigo não existe
+    - Erro se situacao tem valor inválido
+    """
     params = {}
     if turno is not None:
         params["turno"] = turno
@@ -1039,7 +2020,93 @@ def troca_preco(data_inicial: str, data_final: str, realizada: Optional[bool] = 
 
 @mcp.tool()
 def consultar_tanque(tanque_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarTanque - GET /INTEGRACAO/TANQUE"""
+    """
+    **Consulta tanques de armazenamento de combustível.**
+
+    Esta tool retorna a lista de tanques (reservatórios subterrâneos que armazenam
+    combustíveis) cadastrados no sistema. Cada tanque armazena um tipo específico de
+    combustível e abastece uma ou mais bombas.
+
+    **Quando usar:**
+    - Para listar tanques de uma empresa/filial
+    - Para obter ID de tanque para relatórios de estoque
+    - Para controle de capacidade e nível de combustível
+    - Para gestão de ativos e manutenção
+
+    **Hierarquia de Equipamentos:**
+    **Tanque** (armazenamento) → Bomba → Bico (abastecimento)
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_tanque` com os filtros desejados.
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna tanques de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `tanque_codigo` (int, opcional): Código de um tanque específico.
+      Útil para buscar detalhes de um tanque conhecido.
+      Exemplo: 1
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último tanque retornado.
+
+    **Retorno:**
+    Lista de tanques contendo:
+    - Código do tanque
+    - Descrição/identificação (ex: "Tanque 1 - Gasolina")
+    - Produto combustível armazenado
+    - Capacidade total (litros)
+    - Nível atual (litros)
+    - Percentual de ocupação
+    - Empresa/filial
+    - Status (ativo/inativo)
+    - Bombas vinculadas
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todos os tanques de uma empresa
+    tanques = consultar_tanque(
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Buscar um tanque específico
+    tanque = consultar_tanque(
+        tanque_codigo=1,
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Verificar níveis de combustível
+    tanques = consultar_tanque(empresa_codigo=7)
+    for tanque in tanques:
+        produto = tanque["produtoDescricao"]
+        nivel = tanque["nivelAtual"]
+        capacidade = tanque["capacidadeTotal"]
+        percentual = (nivel / capacidade) * 100
+        
+        if percentual < 20:
+            print(f"ALERTA: {produto} com apenas {percentual:.1f}% de capacidade")
+
+    # Cenário 4: Relatório de estoque por tanque
+    tanques = consultar_tanque(empresa_codigo=7)
+    for tanque in tanques:
+        print(f"Tanque: {tanque['descricao']}")
+        print(f"Produto: {tanque['produtoDescricao']}")
+        print(f"Estoque: {tanque['nivelAtual']} litros")
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Tools Relacionadas:**
+    - `consultar_bomba` - Consulta bombas abastecidas pelos tanques
+    - `consultar_bico` - Consulta bicos de abastecimento
+    - `consultar_produto_combustivel` - Consulta produtos armazenados
+
+    **Dica:**
+    Use esta tool para monitoramento de estoque de combustível e alertas de
+    reabastecimento. Tanques com nível abaixo de 20% geralmente precisam de pedido.
+    """
     params = {}
     if tanque_codigo is not None:
         params["tanqueCodigo"] = tanque_codigo
@@ -1169,7 +2236,74 @@ def consultar_produto_lmc_lmp(codigo_produt_lmc: Optional[int] = None) -> str:
 
 @mcp.tool()
 def consultar_produto_estoque(empresa_codigo: int, data_hora: Optional[str] = None, grupo_codigo: Optional[list] = None, produto_codigo: Optional[list] = None) -> str:
-    """consultarProdutoEstoque - GET /INTEGRACAO/PRODUTO_ESTOQUE"""
+    """
+    **Consulta estoque de produtos.**
+
+    Esta tool retorna o estoque atual de produtos. É essencial para controle de estoque
+    e gestão de inventário.
+
+    **Quando usar:**
+    - Para consultar estoque atual de produtos
+    - Para relatórios de estoque
+    - Para verificação de disponibilidade
+    - Para análise de giro de estoque
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, obrigatório): Código da empresa.
+      Obter via: `consultar_empresas`
+    - `produto_codigo` (List[int], opcional): Lista de códigos de produtos específicos.
+      Obter via: `consultar_produto`
+    - `grupo_codigo` (List[int], opcional): Lista de códigos de grupos de produtos.
+    - `data_hora` (str, opcional): Data/hora para consulta histórica (YYYY-MM-DD HH:MM:SS).
+
+    **Retorno:**
+    Lista de produtos com estoque contendo:
+    - Código do produto
+    - Descrição do produto
+    - Quantidade em estoque
+    - Estoque mínimo
+    - Estoque máximo
+    - Custo médio
+    - Valor total do estoque
+    - Última atualização
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar estoque de todos os produtos
+    estoque = consultar_produto_estoque(
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Consultar estoque de produtos específicos
+    estoque = consultar_produto_estoque(
+        empresa_codigo=7,
+        produto_codigo=[123, 456, 789]
+    )
+
+    # Cenário 3: Produtos com estoque baixo
+    estoque = consultar_produto_estoque(empresa_codigo=7)
+    estoque_baixo = [
+        p for p in estoque
+        if p["quantidadeEstoque"] < p["estoqueMinimo"]
+    ]
+    
+    for produto in estoque_baixo:
+        print(f"ALERTA: {produto['descricao']} - Estoque: {produto['quantidadeEstoque']}")
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_empresas` (para obter empresa_codigo)
+    - Opcional: `consultar_produto` (para obter produto_codigo)
+
+    **Tools Relacionadas:**
+    - `consultar_produto` - Consultar detalhes dos produtos
+    - `produto_inventario` - Registrar inventário
+    - `reajustar_estoque_produto_combustivel` - Ajustar estoque de combustíveis
+
+    **Dica:**
+    Use esta tool para monitoramento de estoque e alertas de reabastecimento.
+    Produtos com estoque abaixo do mínimo precisam de pedido de compra.
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -1323,7 +2457,99 @@ def consultar_trr_pedido(empresa_codigo: Optional[int] = None, data_inicial: Opt
 
 @mcp.tool()
 def consultar_pdv(pdv_referencia: Optional[str] = None, pdv_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarPdv - GET /INTEGRACAO/PDV"""
+    """
+    **Consulta PDVs (Pontos de Venda / Caixas) cadastrados.**
+
+    Esta tool retorna a lista de PDVs/Caixas (terminais onde as vendas são registradas)
+    cadastrados no sistema. Cada PDV pode ser um caixa da loja de conveniência ou um
+    terminal de controle da pista.
+
+    **Quando usar:**
+    - Para listar PDVs/caixas de uma empresa/filial
+    - Para obter ID de PDV antes de filtrar vendas por caixa
+    - Para relatórios de performance por caixa
+    - Para controle de equipamentos e terminais
+
+    **Tipos de PDV:**
+    - **Caixa da Loja**: Terminal da loja de conveniência
+    - **Caixa da Pista**: Terminal de controle de abastecimentos
+    - **PDV Móvel**: Terminais portáteis (se aplicável)
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_pdv` com os filtros desejados.
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna PDVs de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `pdv_codigo` (int, opcional): Código de um PDV específico.
+      Útil para buscar detalhes de um PDV conhecido.
+      Exemplo: 1
+    - `pdv_referencia` (str, opcional): Referência/identificação externa do PDV.
+      Exemplo: "CAIXA-01"
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último PDV retornado.
+
+    **Retorno:**
+    Lista de PDVs contendo:
+    - Código do PDV
+    - Descrição/identificação (ex: "Caixa 1", "PDV Loja")
+    - Referência externa
+    - Empresa/filial
+    - Tipo de PDV (loja/pista)
+    - Status (ativo/inativo)
+    - Operador/funcionário atual (se em uso)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todos os PDVs de uma empresa
+    pdvs = consultar_pdv(
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Buscar um PDV específico por código
+    pdv = consultar_pdv(
+        pdv_codigo=1,
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Buscar PDV por referência
+    pdv = consultar_pdv(
+        pdv_referencia="CAIXA-01",
+        empresa_codigo=7
+    )
+
+    # Cenário 4: Relatório de vendas por caixa
+    pdvs = consultar_pdv(empresa_codigo=7)
+    pdv_ids = [p["codigo"] for p in pdvs]
+
+    # Usar IDs em relatório de vendas
+    vendas_por_caixa = vendas_periodo(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        filial=[7],
+        pdv_caixa=pdv_ids,
+        tipo_data="FISCAL",
+        ordenacao_por="QUANTIDADE_VENDIDA",
+        cupom_cancelado=False,
+        agrupamento_por="SEM_AGRUPAMENTO"
+    )
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Tools Relacionadas:**
+    - `vendas_periodo` - Filtrar vendas por PDV/caixa
+    - `consultar_venda` - Consultar vendas com filtro de PDV
+    - `consultar_funcionario` - Consultar operadores de caixa
+
+    **Dica:**
+    Use esta tool para identificar caixas ativos e gerar relatórios de performance
+    por terminal. É útil para análise de produtividade e controle operacional.
+    """
     params = {}
     if pdv_referencia is not None:
         params["pdvReferencia"] = pdv_referencia
@@ -1643,7 +2869,89 @@ def consultar_funcionario_meta(grupo_meta_codigo: Optional[int] = None, ultimo_c
 
 @mcp.tool()
 def consultar_funcionario(funcionario_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarFuncionario - GET /INTEGRACAO/FUNCIONARIO"""
+    """
+    **Consulta funcionários cadastrados no sistema.**
+
+    Esta tool retorna a lista de funcionários (frentistas, operadores de caixa, gerentes, etc.)
+    cadastrados no sistema. É essencial para obter IDs de funcionários antes de filtrar
+    relatórios de vendas, abastecimentos ou produtividade.
+
+    **Quando usar:**
+    - Para listar funcionários de uma empresa/filial
+    - Para obter ID de funcionário antes de gerar relatórios
+    - Para validação de funcionários em operações
+    - Para relatórios de produtividade por funcionário
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar por empresa.
+    2. **Execute a Consulta:** Chame `consultar_funcionario` com os filtros desejados.
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna funcionários de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `funcionario_codigo` (int, opcional): Código de um funcionário específico.
+      Útil para buscar detalhes de um funcionário conhecido.
+      Exemplo: 123
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último funcionário retornado.
+
+    **Retorno:**
+    Lista de funcionários contendo:
+    - Código do funcionário
+    - Nome completo
+    - CPF
+    - Função/cargo (ex: "Frentista", "Gerente", "Caixa")
+    - Empresa/filial vinculada
+    - Status (ativo/inativo)
+    - Data de admissão
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todos os funcionários de uma empresa
+    funcionarios = consultar_funcionario(
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Buscar um funcionário específico
+    funcionario = consultar_funcionario(
+        funcionario_codigo=123
+    )
+
+    # Cenário 3: Listar frentistas para relatório de produtividade
+    funcionarios = consultar_funcionario(
+        empresa_codigo=7
+    )
+    # Filtrar frentistas (se necessário, filtrar por função no resultado)
+    frentistas = [f for f in funcionarios if "Frentista" in f.get("funcao", "")]
+    frentista_ids = [f["codigo"] for f in frentistas]
+
+    # Usar IDs em relatório de vendas
+    vendas_por_frentista = vendas_periodo(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        filial=[7],
+        funcionario=frentista_ids,
+        tipo_data="FISCAL",
+        ordenacao_por="QUANTIDADE_VENDIDA",
+        cupom_cancelado=False
+    )
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Uso Comum:**
+    Esta tool é frequentemente usada em conjunto com:
+    - `vendas_periodo` (filtrar vendas por funcionário)
+    - `abastecimento` (filtrar abastecimentos por frentista)
+    - Relatórios de produtividade
+
+    **Dica:**
+    Funcionários inativos também são retornados. Verifique o campo `status` se
+    precisar apenas de funcionários ativos.
+    """
     params = {}
     if funcionario_codigo is not None:
         params["funcionarioCodigo"] = funcionario_codigo
@@ -1661,7 +2969,58 @@ def consultar_funcionario(funcionario_codigo: Optional[int] = None, empresa_codi
 
 @mcp.tool()
 def consultar_fornecedor(retorna_observacoes: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, fornecedor_codigo_externo: Optional[str] = None, fornecedor_codigo: Optional[int] = None, cnpj_cpf: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarFornecedor - GET /INTEGRACAO/FORNECEDOR"""
+    """
+    **Consulta fornecedores cadastrados.**
+
+    Esta tool retorna a lista de fornecedores (empresas ou pessoas que fornecem produtos
+    e serviços) cadastrados no sistema.
+
+    **Quando usar:**
+    - Para listar fornecedores
+    - Para obter ID de fornecedor antes de criar títulos a pagar
+    - Para buscar fornecedor por CNPJ/CPF
+    - Para integrações com sistemas externos
+
+    **Parâmetros:**
+    - `fornecedor_codigo` (int, opcional): Código de um fornecedor específico.
+    - `fornecedor_codigo_externo` (str, opcional): Código externo do fornecedor.
+    - `cnpj_cpf` (str, opcional): CNPJ ou CPF do fornecedor.
+    - `retorna_observacoes` (bool, opcional): Se True, retorna observações.
+    - `data_hora_atualizacao` (str, opcional): Filtrar por data de atualização.
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+
+    **Retorno:**
+    Lista de fornecedores contendo:
+    - Código do fornecedor
+    - Razão social / Nome
+    - Nome fantasia
+    - CNPJ/CPF
+    - Endereço completo
+    - Telefone
+    - Email
+    - Status (ativo/inativo)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todos os fornecedores
+    fornecedores = consultar_fornecedor()
+
+    # Cenário 2: Buscar fornecedor por CNPJ
+    fornecedor = consultar_fornecedor(
+        cnpj_cpf="12.345.678/0001-90"
+    )
+
+    # Cenário 3: Buscar fornecedor específico
+    fornecedor = consultar_fornecedor(
+        fornecedor_codigo=456
+    )
+    ```
+
+    **Tools Relacionadas:**
+    - `incluir_titulo_pagar` - Criar título a pagar para fornecedor
+    - `consultar_titulo_pagar` - Consultar títulos de fornecedores
+    """
     params = {}
     if retorna_observacoes is not None:
         params["retornaObservacoes"] = retorna_observacoes
@@ -1719,7 +3078,87 @@ def consultar_esclusao_financeiro(empresa_codigo: Optional[int] = None, data_hor
 
 @mcp.tool()
 def estoque_periodo(data_final: str, empresa_codigo: Optional[int] = None, data_hora_atualizacao: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """estoquePeriodo - GET /INTEGRACAO/ESTOQUE_PERIODO"""
+    """
+    **Consulta o estoque de produtos em uma data específica.**
+
+    Esta tool retorna a posição de estoque (quantidade disponível) de produtos em uma
+    determinada data. É ideal para consultas históricas de estoque e acompanhamento de
+    movimentações.
+
+    **Quando usar:**
+    - Para verificar estoque em uma data específica
+    - Para auditoria de movimentações de estoque
+    - Para relatórios históricos de posição
+    - Para reconciliação de inventário
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` se quiser filtrar
+       por empresa específica.
+    2. **Execute a Consulta:** Chame `estoque_periodo` com a data desejada.
+
+    **Parâmetros:**
+    - `data_final` (str, obrigatório): Data de referência para consulta do estoque.
+      Formato: YYYY-MM-DD
+      Retorna o estoque na posição desta data.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna estoque de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `data_hora_atualizacao` (str, opcional): Filtrar por data/hora de atualização.
+      Formato: YYYY-MM-DD HH:MM:SS
+      Útil para sincronização incremental.
+      Exemplo: "2025-01-10 14:30:00"
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último registro retornado.
+
+    **Retorno:**
+    Lista de produtos com informações de estoque:
+    - Código do produto
+    - Descrição do produto
+    - Quantidade em estoque
+    - Unidade de medida
+    - Empresa/filial
+    - Data de referência
+    - Valor unitário (custo)
+    - Valor total em estoque
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar estoque atual de todas as empresas
+    estoque_hoje = estoque_periodo(
+        data_final="2025-01-10"
+    )
+
+    # Cenário 2: Consultar estoque de uma empresa específica
+    estoque_filial = estoque_periodo(
+        data_final="2025-01-10",
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Consultar estoque histórico (final do mês anterior)
+    estoque_mes_anterior = estoque_periodo(
+        data_final="2024-12-31",
+        empresa_codigo=7
+    )
+
+    # Cenário 4: Sincronização incremental
+    estoque_atualizado = estoque_periodo(
+        data_final="2025-01-10",
+        data_hora_atualizacao="2025-01-10 08:00:00"
+    )
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Diferença entre estoque_periodo e estoque:**
+    - `estoque_periodo`: Consulta estoque em uma data específica (histórico)
+    - `estoque`: Consulta cadastro de estoques (locais de armazenamento)
+
+    **Dica:**
+    Para verificar estoque atual, use a data de hoje em `data_final`.
+    """
     params = {}
     if data_final is not None:
         params["dataFinal"] = data_final
@@ -1859,7 +3298,35 @@ def dfe_xml(modelo_documento: int, numero_documento: int, empresa_codigo: int, s
 
 @mcp.tool()
 def consultar_conta(empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarConta - GET /INTEGRACAO/CONTA"""
+    """
+    **Consulta contas bancárias cadastradas.**
+
+    Esta tool retorna a lista de contas bancárias (contas correntes, poupança, etc.)
+    cadastradas no sistema.
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, opcional): Código da empresa
+    - `limite` (int, opcional): Número máximo de registros
+    - `ultimo_codigo` (int, opcional): Para paginação
+
+    **Retorno:**
+    Lista de contas contendo:
+    - Código da conta
+    - Banco
+    - Agência
+    - Número da conta
+    - Tipo de conta
+    - Saldo atual
+
+    **Exemplo:**
+    ```python
+    contas = consultar_conta(empresa_codigo=7)
+    ```
+
+    **Tools Relacionadas:**
+    - `consultar_movimento_conta` - Consultar movimentações
+    - `incluir_movimento_conta` - Criar movimentação
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -2364,7 +3831,73 @@ def consultar_caixa(data_inicial: str, data_final: str, turno: Optional[int] = N
 
 @mcp.tool()
 def consultar_bomba(bomba_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None) -> str:
-    """consultarBomba - GET /INTEGRACAO/BOMBA"""
+    """
+    **Consulta bombas de combustível cadastradas.**
+
+    Esta tool retorna a lista de bombas de combustível (equipamentos que contêm os bicos
+    de abastecimento) cadastradas no sistema. Cada bomba pode ter múltiplos bicos.
+
+    **Quando usar:**
+    - Para listar bombas de uma empresa/filial
+    - Para obter ID de bomba antes de consultar bicos
+    - Para relatórios de equipamentos
+    - Para manutenção e controle de ativos
+
+    **Hierarquia de Equipamentos:**
+    Tanque → Bomba → Bico (onde o abastecimento acontece)
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_bomba` com os filtros desejados.
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna bombas de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `bomba_codigo` (int, opcional): Código de uma bomba específica.
+      Útil para buscar detalhes de uma bomba conhecida.
+      Exemplo: 1
+
+    **Retorno:**
+    Lista de bombas contendo:
+    - Código da bomba
+    - Descrição/identificação
+    - Empresa/filial
+    - Status (ativa/inativa)
+    - Bicos vinculados
+    - Tanque associado
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todas as bombas de uma empresa
+    bombas = consultar_bomba(
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Buscar uma bomba específica
+    bomba = consultar_bomba(
+        bomba_codigo=1,
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Listar bombas para depois consultar bicos
+    bombas = consultar_bomba(empresa_codigo=7)
+    for bomba in bombas:
+        bomba_id = bomba["codigo"]
+        # Consultar bicos desta bomba
+        bicos = consultar_bico(empresa_codigo=7)
+        bicos_da_bomba = [b for b in bicos if b.get("bombaCodigo") == bomba_id]
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Tools Relacionadas:**
+    - `consultar_bico` - Consulta bicos vinculados às bombas
+    - `consultar_tanque` - Consulta tanques que abastecem as bombas
+    - `abastecimento` - Consulta abastecimentos realizados nos bicos
+    """
     params = {}
     if bomba_codigo is not None:
         params["bombaCodigo"] = bomba_codigo
@@ -2378,7 +3911,88 @@ def consultar_bomba(bomba_codigo: Optional[int] = None, empresa_codigo: Optional
 
 @mcp.tool()
 def consultar_bico(bico_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarBico - GET /INTEGRACAO/BICO"""
+    """
+    **Consulta bicos de abastecimento cadastrados.**
+
+    Esta tool retorna a lista de bicos de abastecimento (pontos onde o combustível é
+    efetivamente abastecido nos veículos) cadastrados no sistema. Cada bico está vinculado
+    a uma bomba e a um produto combustível.
+
+    **Quando usar:**
+    - Para listar bicos de uma empresa/filial
+    - Para obter ID de bico antes de filtrar abastecimentos
+    - Para relatórios de produção por bico
+    - Para controle de equipamentos
+
+    **Hierarquia de Equipamentos:**
+    Tanque → Bomba → **Bico** (onde o abastecimento acontece)
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_bico` com os filtros desejados.
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna bicos de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `bico_codigo` (int, opcional): Código de um bico específico.
+      Útil para buscar detalhes de um bico conhecido.
+      Exemplo: 101
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último bico retornado.
+
+    **Retorno:**
+    Lista de bicos contendo:
+    - Código do bico
+    - Número/identificação do bico
+    - Bomba vinculada
+    - Produto combustível
+    - Empresa/filial
+    - Status (ativo/inativo)
+    - Encerrante (leitura do totalizador)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todos os bicos de uma empresa
+    bicos = consultar_bico(
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Buscar um bico específico
+    bico = consultar_bico(
+        bico_codigo=101,
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Listar bicos de gasolina para relatório
+    bicos = consultar_bico(empresa_codigo=7)
+    # Filtrar por produto (exemplo)
+    bicos_gasolina = [b for b in bicos if "Gasolina" in b.get("produtoDescricao", "")]
+    bico_ids = [b["codigo"] for b in bicos_gasolina]
+
+    # Usar IDs em relatório de abastecimentos
+    abastecimentos = abastecimento(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+    # Filtrar por bicos de gasolina
+    abast_gasolina = [a for a in abastecimentos if a.get("bicoCodigo") in bico_ids]
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Tools Relacionadas:**
+    - `consultar_bomba` - Consulta bombas que contêm os bicos
+    - `consultar_tanque` - Consulta tanques de armazenamento
+    - `abastecimento` - Consulta abastecimentos realizados nos bicos
+
+    **Dica:**
+    Bicos são identificados por número (ex: Bico 1, Bico 2). Use este número para
+    comunicação com usuários finais, mas use o `codigo` para filtros em APIs.
+    """
     params = {}
     if bico_codigo is not None:
         params["bicoCodigo"] = bico_codigo
@@ -2479,7 +4093,121 @@ def consultar_adiantamento_fornecedor(data_inicial: str, data_final: str, fornec
 
 @mcp.tool()
 def consultar_abastecimento(data_inicial: str, data_final: str, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarAbastecimento - GET /INTEGRACAO/ABASTECIMENTO"""
+    """
+    **Consulta abastecimentos realizados na pista.**
+
+    Esta tool retorna todos os abastecimentos de combustível realizados na pista do posto.
+    É uma das tools mais importantes para análise de vendas de combustíveis, controle de
+    estoque e performance de frentistas.
+
+    **Quando usar:**
+    - Para relatórios de abastecimentos
+    - Para análise de vendas de combustível
+    - Para controle de performance de frentistas
+    - Para conciliação de estoque vs vendas
+    - Para auditoria de operações da pista
+
+    **Fluxo de Uso Essencial:**
+    1. **Execute a Consulta:** Chame `consultar_abastecimento` com o período desejado.
+    2. **Analise os Dados:** Use os dados para relatórios e análises.
+
+    **Parâmetros:**
+    - `data_inicial` (str, obrigatório): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, obrigatório): Data de fim no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `tipo_data` (str, opcional): Tipo de data para filtro.
+      Valores: "FISCAL" ou "MOVIMENTO"
+      Default: "FISCAL"
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último abastecimento.
+
+    **Retorno:**
+    Lista de abastecimentos contendo:
+    - Código do abastecimento
+    - Data e hora
+    - Bico utilizado
+    - Bomba
+    - Produto combustível (Gasolina, Diesel, Etanol, etc.)
+    - Quantidade (litros)
+    - Preço unitário (por litro)
+    - Valor total
+    - Frentista responsável
+    - Placa do veículo (se informada)
+    - Cliente (se identificado)
+    - Forma de pagamento
+    - Empresa/filial
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar abastecimentos do dia
+    abastecimentos = consultar_abastecimento(
+        data_inicial="2025-01-10",
+        data_final="2025-01-10"
+    )
+
+    # Cenário 2: Relatório mensal de abastecimentos
+    abastecimentos = consultar_abastecimento(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        tipo_data="FISCAL"
+    )
+
+    # Cenário 3: Análise por produto
+    abastecimentos = consultar_abastecimento(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31"
+    )
+    
+    # Agrupar por produto
+    from collections import defaultdict
+    vendas_por_produto = defaultdict(lambda: {"litros": 0, "valor": 0})
+    
+    for abast in abastecimentos:
+        produto = abast["produtoDescricao"]
+        vendas_por_produto[produto]["litros"] += abast["quantidade"]
+        vendas_por_produto[produto]["valor"] += abast["valorTotal"]
+    
+    # Mostrar resultados
+    for produto, dados in vendas_por_produto.items():
+        print(f"{produto}: {dados['litros']:.2f}L - R$ {dados['valor']:.2f}")
+
+    # Cenário 4: Performance de frentistas
+    abastecimentos = consultar_abastecimento(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31"
+    )
+    
+    vendas_por_frentista = defaultdict(lambda: {"quantidade": 0, "valor": 0})
+    
+    for abast in abastecimentos:
+        frentista = abast.get("frentistaNome", "Não identificado")
+        vendas_por_frentista[frentista]["quantidade"] += 1
+        vendas_por_frentista[frentista]["valor"] += abast["valorTotal"]
+    
+    # Ranking de frentistas
+    ranking = sorted(
+        vendas_por_frentista.items(),
+        key=lambda x: x[1]["valor"],
+        reverse=True
+    )
+    ```
+
+    **Dependências:**
+    Nenhuma. Esta tool pode ser chamada diretamente.
+
+    **Tools Relacionadas:**
+    - `consultar_bico` - Consultar bicos de abastecimento
+    - `consultar_bomba` - Consultar bombas
+    - `consultar_produto_combustivel` - Consultar produtos combustíveis
+    - `consultar_funcionario` - Consultar frentistas
+    - `vendas_periodo` - Relatório agregado de vendas (inclui abastecimentos)
+
+    **Dica:**
+    Esta tool retorna dados transacionais detalhados. Para relatórios agregados e
+    análises complexas, considere usar `vendas_periodo` que é mais rápido e oferece
+    múltiplos agrupamentos.
+    """
     params = {}
     if data_inicial is not None:
         params["dataInicial"] = data_inicial
@@ -2585,7 +4313,67 @@ def cliente_consultar(cnpj_cpf: str) -> str:
 
 @mcp.tool()
 def consultar_produto_combustivel() -> str:
-    """consultarProdutoCombustivel - GET /INTEGRACAO/PEDIDO_COMBUSTIVEL/PRODUTO"""
+    """
+    **Consulta produtos combustíveis disponíveis para pedidos.**
+
+    Esta tool retorna a lista de produtos combustíveis cadastrados no sistema que podem
+    ser utilizados em pedidos de combustível. É específica para o módulo de pedidos e
+    difere de `consultar_produto` que retorna todos os produtos.
+
+    **Quando usar:**
+    - Para listar combustíveis disponíveis para pedidos
+    - Para obter IDs de produtos combustíveis antes de criar pedidos
+    - Para validação de produtos em integrações de pedidos
+
+    **Diferença entre consultar_produto_combustivel e consultar_produto:**
+    - `consultar_produto_combustivel`: Apenas combustíveis do módulo de pedidos (sem parâmetros)
+    - `consultar_produto`: Todos os produtos (combustíveis + loja), permite filtros por empresa
+
+    **Fluxo de Uso Essencial:**
+    1. **Execute a Consulta:** Chame `consultar_produto_combustivel` diretamente.
+    2. **Use os IDs:** Utilize os códigos retornados em operações de pedidos de combustível.
+
+    **Parâmetros:**
+    Esta tool não possui parâmetros. Retorna todos os produtos combustíveis cadastrados.
+
+    **Retorno:**
+    Lista de produtos combustíveis contendo:
+    - Código do produto
+    - Descrição (ex: "Gasolina Comum", "Diesel S10", "Etanol")
+    - Tipo de combustível
+    - Unidade de medida
+    - Status (ativo/inativo)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todos os combustíveis disponíveis
+    combustiveis = consultar_produto_combustivel()
+    print(combustiveis)
+    # Resultado: [{"codigo": 150, "descricao": "Gasolina Comum"}, ...]
+
+    # Cenário 2: Buscar ID de um combustível específico
+    combustiveis = consultar_produto_combustivel()
+    gasolina = next(c for c in combustiveis if "Gasolina" in c["descricao"])
+    gasolina_id = gasolina["codigo"]
+
+    # Cenário 3: Validar se um produto é combustível válido para pedidos
+    combustiveis = consultar_produto_combustivel()
+    ids_validos = [c["codigo"] for c in combustiveis]
+    if produto_id in ids_validos:
+        print("Produto válido para pedido de combustível")
+    ```
+
+    **Dependências:**
+    Nenhuma. Esta tool pode ser chamada diretamente.
+
+    **Uso Recomendado:**
+    - Use esta tool quando trabalhar com o módulo de pedidos de combustível
+    - Para outros casos, use `consultar_produto` com filtro `tipo_produto=["COMBUSTIVEL"]`
+
+    **Dica:**
+    Os IDs retornados aqui são os mesmos usados em `consultar_produto`, mas esta tool
+    é mais rápida por retornar apenas combustíveis.
+    """
     params = {}
 
     result = client.get("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PRODUTO", params=params)
@@ -2647,7 +4435,74 @@ def pedido_status(pedidos: Optional[list] = None) -> str:
 
 @mcp.tool()
 def vendas_periodo(cupom_cancelado: bool, ordenacao_por: str, data_inicial: str, data_final: str, tipo_data: str, agrupamento_por: Optional[str] = None, prazo: Optional[list] = None, turno: Optional[list] = None, hora_acompanha_data: Optional[bool] = None, hora_inicial: Optional[str] = None, hora_final: Optional[str] = None, grupo_produto: Optional[list] = None, ecf: Optional[list] = None, funcionario: Optional[list] = None, produto: Optional[list] = None, cliente: Optional[int] = None, pdv_caixa: Optional[list] = None, tipo_produto: Optional[list] = None, filial: Optional[list] = None, estoque: Optional[list] = None, tipo_venda: Optional[str] = None, apresenta_preco_medio: Optional[bool] = None, grupo_cliente: Optional[list] = None, consolidar: Optional[bool] = None, sub_grupo_produto_nivel1: Optional[list] = None, sub_grupo_produto_nivel2: Optional[list] = None, sub_grupo_produto_nivel3: Optional[list] = None, agrupar_totalizadores: Optional[str] = None, depto_selcon: Optional[str] = None, pdv_gerou_venda: Optional[list] = None, centro_custo: Optional[list] = None) -> str:
-    """vendasPeriodo - GET /INTEGRACAO/RELATORIO/VENDA_PERIODO"""
+    """
+    **Gera um relatório detalhado de vendas por período.**
+
+    Esta tool é uma das mais poderosas e complexas, permitindo a extração de dados de vendas
+    com múltiplos filtros, agrupamentos e ordenações. Para utilizá-la corretamente, é crucial
+    entender suas dependências.
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa:** Primeiro, use a tool `consultar_empresas` para listar as
+       empresas (filiais) e obter o `empresaCodigo` desejado.
+    2. **Consulte IDs para Filtros (Opcional):** Se precisar filtrar por produto, cliente,
+       funcionário, etc., use as tools de consulta correspondentes (`consultar_produto`,
+       `consultar_cliente`) para obter os IDs antes de chamar esta tool.
+    3. **Execute a Consulta:** Chame `vendas_periodo` com as datas, o `empresaCodigo`
+       (no parâmetro `filial`) e outros filtros desejados.
+
+    **Parâmetros Principais:**
+    - `data_inicial` (str, obrigatório): Data de início do período (formato: 'YYYY-MM-DD').
+    - `data_final` (str, obrigatório): Data de fim do período (formato: 'YYYY-MM-DD').
+    - `filial` (List[int], obrigatório): Lista de IDs de empresas/filiais a serem incluídas.
+      Obtenha os IDs com a tool `consultar_empresas`.
+    - `tipo_data` (str, obrigatório): Define a referência de data. Valores: 'FISCAL' ou 'MOVIMENTO'.
+    - `ordenacao_por` (str, obrigatório): Critério de ordenação. Valores: 'REFERENCIA',
+      'PRODUTO', 'PARTICIPACAO', 'QUANTIDADE_VENDIDA'.
+    - `cupom_cancelado` (bool, obrigatório): Se `True`, inclui cupons cancelados no relatório.
+
+    **Parâmetros de Agrupamento e Filtro (Opcionais):**
+    - `agrupamento_por` (str): Agrupa os resultados. Ex: 'PRODUTO', 'CLIENTE', 'DIA', 'MES'.
+      Default: 'SEM_AGRUPAMENTO'.
+    - `produto` (List[int]): Lista de IDs de produtos para filtrar. Use `consultar_produto`
+      para obter os IDs.
+    - `cliente` (int): ID de um cliente específico. Use `consultar_cliente` para obter o ID.
+    - `funcionario` (List[int]): Lista de IDs de funcionários. Use `consultar_funcionario`
+      para obter os IDs.
+    - `grupo_produto` (List[int]): Lista de IDs de grupos de produtos. Use
+      `consultar_grupo_produto` para obter os IDs.
+    - `tipo_produto` (List[str]): Filtra por tipo de produto. Ex: ['COMBUSTIVEL'],
+      ['PRODUTO', 'SERVICO'].
+    - `depto_selcon` (str): Filtra por departamento. Valores: 'PISTA' (combustíveis),
+      'LOJA' (conveniência), 'AMBOS'.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário: Gerar um relatório de vendas de combustível para a filial 1, agrupado por produto.
+
+    # 1. Obter ID da empresa
+    # empresas = consultar_empresas()
+    # id_filial_1 = 7  # Supondo que o ID da filial desejada seja 7
+
+    # 2. Chamar a tool de vendas
+    relatorio = vendas_periodo(
+        data_inicial='2025-12-01',
+        data_final='2025-12-31',
+        filial=[7],
+        tipo_data='FISCAL',
+        ordenacao_por='QUANTIDADE_VENDIDA',
+        cupom_cancelado=False,
+        agrupamento_por='PRODUTO',
+        tipo_produto=['COMBUSTIVEL']
+    )
+    print(relatorio)
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_empresas` (para obter filial)
+    - Opcional: `consultar_produto`, `consultar_cliente`, `consultar_funcionario`,
+      `consultar_grupo_produto` (para filtros específicos)
+    """
     params = {}
     if cupom_cancelado is not None:
         params["cupomCancelado"] = cupom_cancelado
