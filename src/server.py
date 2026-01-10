@@ -422,7 +422,41 @@ def receber_cartoes(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def reajustar_estoque_produto_combustivel(dados: Dict[str, Any]) -> str:
-    """reajustarEstoqueProdutoCombustivel - PUT /INTEGRACAO/REAJUSTAR_ESTOQUE_PRODUTO_COMBUSTIVEL"""
+    """
+    **Reajusta estoque de produto combustível.**
+
+    Esta tool permite ajustar manualmente o estoque de produtos combustíveis (gasolina,
+    diesel, etanol, etc.). É específica para combustíveis e considera tanques.
+
+    **Quando usar:**
+    - Para ajustar estoque após medição de tanques
+    - Para correções de estoque de combustíveis
+    - Para lançar perdas ou ganhos
+
+    **Parâmetros (via objeto `dados`):**
+    - `produtoCodigo` (int): Código do produto combustível
+    - `tanqueCodigo` (int): Código do tanque
+    - `quantidadeAjuste` (float): Quantidade a ajustar (positivo ou negativo)
+    - `dataAjuste` (str): Data do ajuste (YYYY-MM-DD)
+    - `motivo` (str): Motivo do ajuste
+
+    **Exemplo:**
+    ```python
+    reajustar_estoque_produto_combustivel(
+        dados={
+            "produtoCodigo": 1,
+            "tanqueCodigo": 1,
+            "quantidadeAjuste": -50.5,  # Perda de 50.5 litros
+            "dataAjuste": "2025-01-10",
+            "motivo": "Evaporáção"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - `consultar_produto_combustivel` (para obter produtoCodigo)
+    - `consultar_tanque` (para obter tanqueCodigo)
+    """
     endpoint = f"/INTEGRACAO/REAJUSTAR_ESTOQUE_PRODUTO_COMBUSTIVEL"
     params = {}
 
@@ -1104,7 +1138,28 @@ def incluir_movimento_conta(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def consultar_lancamento_contabil(data_inicial: str, data_final: str, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, lote_contabil: Optional[int] = None) -> str:
-    """consultarLancamentoContabil - GET /INTEGRACAO/LANCAMENTO_CONTABIL"""
+    """
+    **Consulta lançamentos contábeis.**
+
+    Esta tool retorna lançamentos contábeis registrados no sistema. É usada para
+    integrações contábeis e relatórios financeiros.
+
+    **Parâmetros:**
+    - `data_inicial` (str, obrigatório): Data inicial (YYYY-MM-DD)
+    - `data_final` (str, obrigatório): Data final (YYYY-MM-DD)
+    - `empresa_codigo` (int, opcional): Código da empresa
+    - `lote_contabil` (int, opcional): Número do lote contábil
+    - `limite` (int, opcional): Número máximo de registros
+
+    **Exemplo:**
+    ```python
+    lancamentos = consultar_lancamento_contabil(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+    ```
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -1126,7 +1181,31 @@ def consultar_lancamento_contabil(data_inicial: str, data_final: str, empresa_co
 
 @mcp.tool()
 def incluir_lancamento_contabil(dados: Dict[str, Any]) -> str:
-    """incluirLancamentoContabil - POST /INTEGRACAO/LANCAMENTO_CONTABIL"""
+    """
+    **Cria um novo lançamento contábil.**
+
+    Esta tool permite criar lançamentos contábeis manualmente no sistema.
+
+    **Parâmetros (via objeto `dados`):**
+    - `dataLancamento` (str): Data do lançamento (YYYY-MM-DD)
+    - `historico` (str): Histórico do lançamento
+    - `valor` (float): Valor do lançamento
+    - `contaDebito` (int): Código da conta de débito
+    - `contaCredito` (int): Código da conta de crédito
+
+    **Exemplo:**
+    ```python
+    incluir_lancamento_contabil(
+        dados={
+            "dataLancamento": "2025-01-10",
+            "historico": "Pagamento de fornecedor",
+            "valor": 5000.00,
+            "contaDebito": 101,
+            "contaCredito": 201
+        }
+    )
+    ```
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/LANCAMENTO_CONTABIL", data=dados, params=params)
@@ -1137,7 +1216,32 @@ def incluir_lancamento_contabil(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def incluir_produto(dados: Dict[str, Any], empresa_codigo: Optional[int] = None) -> str:
-    """incluirProduto - POST /INTEGRACAO/INCLUIR_PRODUTO"""
+    """
+    **Cria um novo produto.**
+
+    Esta tool permite cadastrar um novo produto no sistema.
+
+    **Parâmetros:**
+    - `dados` (Dict): Objeto com dados do produto:
+      * `descricao` (str): Descrição do produto
+      * `codigoBarras` (str, opcional): Código de barras
+      * `preco` (float): Preço de venda
+      * `grupoCodigo` (int): Código do grupo
+    - `empresa_codigo` (int, opcional): Código da empresa
+
+    **Exemplo:**
+    ```python
+    incluir_produto(
+        dados={
+            "descricao": "Refrigerante 2L",
+            "codigoBarras": "7891234567890",
+            "preco": 8.50,
+            "grupoCodigo": 10
+        },
+        empresa_codigo=7
+    )
+    ```
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -2734,7 +2838,58 @@ def consultar_funcionario(funcionario_codigo: Optional[int] = None, empresa_codi
 
 @mcp.tool()
 def consultar_fornecedor(retorna_observacoes: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, fornecedor_codigo_externo: Optional[str] = None, fornecedor_codigo: Optional[int] = None, cnpj_cpf: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarFornecedor - GET /INTEGRACAO/FORNECEDOR"""
+    """
+    **Consulta fornecedores cadastrados.**
+
+    Esta tool retorna a lista de fornecedores (empresas ou pessoas que fornecem produtos
+    e serviços) cadastrados no sistema.
+
+    **Quando usar:**
+    - Para listar fornecedores
+    - Para obter ID de fornecedor antes de criar títulos a pagar
+    - Para buscar fornecedor por CNPJ/CPF
+    - Para integrações com sistemas externos
+
+    **Parâmetros:**
+    - `fornecedor_codigo` (int, opcional): Código de um fornecedor específico.
+    - `fornecedor_codigo_externo` (str, opcional): Código externo do fornecedor.
+    - `cnpj_cpf` (str, opcional): CNPJ ou CPF do fornecedor.
+    - `retorna_observacoes` (bool, opcional): Se True, retorna observações.
+    - `data_hora_atualizacao` (str, opcional): Filtrar por data de atualização.
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+
+    **Retorno:**
+    Lista de fornecedores contendo:
+    - Código do fornecedor
+    - Razão social / Nome
+    - Nome fantasia
+    - CNPJ/CPF
+    - Endereço completo
+    - Telefone
+    - Email
+    - Status (ativo/inativo)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todos os fornecedores
+    fornecedores = consultar_fornecedor()
+
+    # Cenário 2: Buscar fornecedor por CNPJ
+    fornecedor = consultar_fornecedor(
+        cnpj_cpf="12.345.678/0001-90"
+    )
+
+    # Cenário 3: Buscar fornecedor específico
+    fornecedor = consultar_fornecedor(
+        fornecedor_codigo=456
+    )
+    ```
+
+    **Tools Relacionadas:**
+    - `incluir_titulo_pagar` - Criar título a pagar para fornecedor
+    - `consultar_titulo_pagar` - Consultar títulos de fornecedores
+    """
     params = {}
     if retorna_observacoes is not None:
         params["retornaObservacoes"] = retorna_observacoes
