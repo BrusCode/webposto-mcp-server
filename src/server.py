@@ -551,7 +551,22 @@ def consultar_transferencia_bancaria(data_inicial: str, data_final: str, empresa
 
 @mcp.tool()
 def incluir_transferencia(dados: Dict[str, Any]) -> str:
-    """incluirTransferencia - POST /INTEGRACAO/TRANSFERENCIA_BANCARIA"""
+    """
+    **Cria uma transferência bancária.**
+
+    Registra transferência entre contas bancárias.
+
+    **Parâmetros (via `dados`):**
+    - `contaOrigemCodigo` (int): Conta de origem
+    - `contaDestinoCodigo` (int): Conta de destino
+    - `valor` (float): Valor da transferência
+    - `dataTransferencia` (str): Data (YYYY-MM-DD)
+
+    **Exemplo:**
+    ```python
+    incluir_transferencia(dados={"contaOrigemCodigo": 1, "contaDestinoCodigo": 2, "valor": 1000.00, "dataTransferencia": "2025-01-10"})
+    ```
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/TRANSFERENCIA_BANCARIA", data=dados, params=params)
