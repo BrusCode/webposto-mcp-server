@@ -318,7 +318,103 @@ def incluir_transferencia(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def consultar_titulo_receber(data_inicial: str, data_final: str, turno: Optional[int] = None, empresa_codigo: Optional[int] = None, data_hora_atualizacao: Optional[str] = None, apenas_pendente: Optional[bool] = None, codigo_duplicata: Optional[int] = None, data_filtro: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, convertido: Optional[bool] = None, venda_codigo: Optional[list] = None) -> str:
-    """consultarTituloReceber - GET /INTEGRACAO/TITULO_RECEBER"""
+    """
+    **Consulta títulos a receber (contas a receber).**
+
+    Esta tool retorna títulos financeiros a receber, como duplicatas, cheques pré-datados,
+    cartões a receber, etc. É essencial para gestão de contas a receber e fluxo de caixa.
+
+    **Quando usar:**
+    - Para listar títulos pendentes de recebimento
+    - Para acompanhamento de inadimplência
+    - Para relatórios de contas a receber
+    - Para conciliação financeira
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_titulo_receber` com período e filtros.
+
+    **Parâmetros Principais:**
+    - `data_inicial` (str, obrigatório): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, obrigatório): Data de fim no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (int, opcional): Código da empresa/filial.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `apenas_pendente` (bool, opcional): Se True, retorna apenas títulos não recebidos.
+      Muito útil para gestão de inadimplência.
+      Exemplo: True
+    - `data_filtro` (str, opcional): Tipo de data para filtro.
+      Valores: "VENCIMENTO", "EMISSAO", "RECEBIMENTO"
+      Default: "VENCIMENTO"
+    - `venda_codigo` (List[int], opcional): Filtrar por vendas específicas.
+      Obter via: `consultar_venda`
+    - `convertido` (bool, opcional): Filtrar títulos convertidos.
+    - `codigo_duplicata` (int, opcional): Código de duplicata específica.
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+
+    **Retorno:**
+    Lista de títulos a receber contendo:
+    - Código do título
+    - Número da duplicata
+    - Cliente
+    - Valor original
+    - Valor recebido
+    - Saldo pendente
+    - Data de emissão
+    - Data de vencimento
+    - Data de recebimento (se recebido)
+    - Situação (pendente/recebido/cancelado)
+    - Empresa/filial
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar títulos pendentes (inadimplência)
+    pendentes = consultar_titulo_receber(
+        data_inicial="2025-01-01",
+        data_final="2025-01-10",
+        empresa_codigo=7,
+        apenas_pendente=True,
+        data_filtro="VENCIMENTO"
+    )
+
+    # Cenário 2: Listar todos os títulos do mês
+    titulos = consultar_titulo_receber(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Relatório de inadimplência
+    import datetime
+    hoje = datetime.date.today()
+    vencidos = consultar_titulo_receber(
+        data_inicial="2024-01-01",
+        data_final=hoje.strftime("%Y-%m-%d"),
+        empresa_codigo=7,
+        apenas_pendente=True,
+        data_filtro="VENCIMENTO"
+    )
+    
+    total_vencido = sum(t["saldoPendente"] for t in vencidos)
+    print(f"Total vencido: R$ {total_vencido:,.2f}")
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+    - Opcional: `consultar_venda` (para obter venda_codigo)
+
+    **Tools Relacionadas:**
+    - `receber_titulo` - Registrar recebimento de título
+    - `incluir_titulo_receber` - Criar novo título a receber
+    - `consultar_venda` - Consultar vendas que geraram títulos
+
+    **Dica:**
+    Use `apenas_pendente=True` com `data_filtro="VENCIMENTO"` para relatórios de
+    inadimplência e cobrança.
+    """
     params = {}
     if turno is not None:
         params["turno"] = turno
@@ -363,7 +459,108 @@ def incluir_titulo_receber(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def consultar_titulo_pagar(data_inicial: Optional[str] = None, data_final: Optional[str] = None, data_hora_atualizacao: Optional[str] = None, apenas_pendente: Optional[bool] = None, data_filtro: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, empresa_codigo: Optional[int] = None, nota_entrada_codigo: Optional[int] = None, titulo_pagar_codigo: Optional[int] = None, fornecedor_codigo: Optional[int] = None, linha_digitavel: Optional[str] = None, autorizado: Optional[bool] = None, tipo_lancamento: Optional[str] = None) -> str:
-    """consultarTituloPagar - GET /INTEGRACAO/TITULO_PAGAR"""
+    """
+    **Consulta títulos a pagar (contas a pagar).**
+
+    Esta tool retorna títulos financeiros a pagar, como boletos de fornecedores, notas
+    fiscais a pagar, despesas operacionais, etc. É essencial para gestão de contas a
+    pagar e fluxo de caixa.
+
+    **Quando usar:**
+    - Para listar títulos pendentes de pagamento
+    - Para planejamento de fluxo de caixa
+    - Para relatórios de contas a pagar
+    - Para conciliação financeira com fornecedores
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_titulo_pagar` com período e filtros.
+
+    **Parâmetros Principais:**
+    - `data_inicial` (str, opcional): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, opcional): Data de fim no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (int, opcional): Código da empresa/filial.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `apenas_pendente` (bool, opcional): Se True, retorna apenas títulos não pagos.
+      Muito útil para gestão de contas a pagar.
+      Exemplo: True
+    - `data_filtro` (str, opcional): Tipo de data para filtro.
+      Valores: "VENCIMENTO", "EMISSAO", "PAGAMENTO"
+      Default: "VENCIMENTO"
+    - `fornecedor_codigo` (int, opcional): Filtrar por fornecedor específico.
+      Obter via: `consultar_fornecedor`
+    - `nota_entrada_codigo` (int, opcional): Filtrar por nota fiscal de entrada.
+    - `linha_digitavel` (str, opcional): Buscar por linha digitável de boleto.
+    - `autorizado` (bool, opcional): Filtrar títulos autorizados para pagamento.
+    - `tipo_lancamento` (str, opcional): Tipo de lançamento.
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+
+    **Retorno:**
+    Lista de títulos a pagar contendo:
+    - Código do título
+    - Número do documento
+    - Fornecedor
+    - Valor original
+    - Valor pago
+    - Saldo pendente
+    - Data de emissão
+    - Data de vencimento
+    - Data de pagamento (se pago)
+    - Situação (pendente/pago/cancelado)
+    - Linha digitável (se boleto)
+    - Empresa/filial
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar títulos pendentes a vencer
+    pendentes = consultar_titulo_pagar(
+        data_inicial="2025-01-10",
+        data_final="2025-01-31",
+        empresa_codigo=7,
+        apenas_pendente=True,
+        data_filtro="VENCIMENTO"
+    )
+
+    # Cenário 2: Listar todos os pagamentos do mês
+    titulos = consultar_titulo_pagar(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Fluxo de caixa - títulos a vencer nos próximos 7 dias
+    import datetime
+    hoje = datetime.date.today()
+    proximos_7_dias = hoje + datetime.timedelta(days=7)
+    
+    a_vencer = consultar_titulo_pagar(
+        data_inicial=hoje.strftime("%Y-%m-%d"),
+        data_final=proximos_7_dias.strftime("%Y-%m-%d"),
+        empresa_codigo=7,
+        apenas_pendente=True,
+        data_filtro="VENCIMENTO"
+    )
+    
+    total_a_pagar = sum(t["saldoPendente"] for t in a_vencer)
+    print(f"A pagar nos próximos 7 dias: R$ {total_a_pagar:,.2f}")
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+    - Opcional: `consultar_fornecedor` (para obter fornecedor_codigo)
+
+    **Tools Relacionadas:**
+    - `incluir_titulo_pagar` - Criar novo título a pagar
+    - `consultar_fornecedor` - Consultar fornecedores
+
+    **Dica:**
+    Use `apenas_pendente=True` com `data_filtro="VENCIMENTO"` para planejamento de
+    fluxo de caixa e gestão de pagamentos.
+    """
     params = {}
     if data_inicial is not None:
         params["dataInicial"] = data_inicial
@@ -933,7 +1130,122 @@ def consultar_item_fidelidade(venda_item_voucher_codigo: Optional[int] = None, v
 
 @mcp.tool()
 def consultar_venda_item(empresa_codigo: Optional[int] = None, usa_produto_lmc: Optional[bool] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, venda_codigo: Optional[list] = None) -> str:
-    """consultarVendaItem - GET /INTEGRACAO/VENDA_ITEM"""
+    """
+    **Consulta itens individuais de vendas.**
+
+    Esta tool retorna os itens (produtos) vendidos em cada transação, permitindo análise
+    detalhada de quais produtos foram vendidos, em que quantidade, preço e valor total.
+    É essencial para relatórios de produtos mais vendidos e análise de mix de produtos.
+
+    **Diferença entre consultar_venda e consultar_venda_item:**
+    - `consultar_venda`: Retorna cabeçalho das vendas (data, cliente, total)
+    - `consultar_venda_item`: Retorna itens/produtos de cada venda (detalhamento)
+
+    **Quando usar:**
+    - Para análise de produtos vendidos
+    - Para relatórios de itens mais vendidos
+    - Para auditoria de preços praticados
+    - Para conciliação de estoque com vendas
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Consulte Vendas (Opcional):** Use `consultar_venda` para obter códigos de vendas.
+    3. **Execute a Consulta:** Chame `consultar_venda_item` com filtros desejados.
+
+    **Parâmetros:**
+    - `data_inicial` (str, opcional): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, opcional): Data de fim no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `venda_codigo` (List[int], opcional): Lista de códigos de vendas específicas.
+      Útil para buscar itens de vendas conhecidas.
+      Obter via: `consultar_venda`
+      Exemplo: [12345, 12346]
+    - `tipo_data` (str, opcional): Tipo de data para filtro.
+      Valores: "FISCAL" ou "MOVIMENTO"
+      Default: "FISCAL"
+    - `usa_produto_lmc` (bool, opcional): Se True, usa código LMC do produto.
+      Exemplo: False
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último item retornado.
+
+    **Retorno:**
+    Lista de itens de venda contendo:
+    - Código do item
+    - Código da venda (cabeçalho)
+    - Código do produto
+    - Descrição do produto
+    - Quantidade vendida
+    - Preço unitário
+    - Valor total do item
+    - Desconto aplicado
+    - Data da venda
+    - Empresa/filial
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar todos os itens vendidos no dia
+    itens = consultar_venda_item(
+        data_inicial="2025-01-10",
+        data_final="2025-01-10",
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Consultar itens de vendas específicas
+    # Primeiro, obter vendas
+    vendas = consultar_venda(
+        data_inicial="2025-01-10",
+        data_final="2025-01-10",
+        empresa_codigo=7
+    )
+    venda_ids = [v["codigo"] for v in vendas[:5]]  # Primeiras 5 vendas
+    
+    # Depois, obter itens dessas vendas
+    itens = consultar_venda_item(
+        venda_codigo=venda_ids,
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Análise de produtos mais vendidos
+    itens = consultar_venda_item(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+    
+    # Agrupar por produto
+    from collections import defaultdict
+    vendas_por_produto = defaultdict(lambda: {"quantidade": 0, "valor": 0})
+    
+    for item in itens:
+        produto = item["produtoDescricao"]
+        vendas_por_produto[produto]["quantidade"] += item["quantidade"]
+        vendas_por_produto[produto]["valor"] += item["valorTotal"]
+    
+    # Ordenar por quantidade
+    top_produtos = sorted(
+        vendas_por_produto.items(),
+        key=lambda x: x[1]["quantidade"],
+        reverse=True
+    )[:10]
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+    - Opcional: `consultar_venda` (para obter venda_codigo)
+
+    **Tools Relacionadas:**
+    - `consultar_venda` - Consulta cabeçalho das vendas
+    - `vendas_periodo` - Relatório agregado de vendas
+    - `consultar_produto` - Consulta detalhes dos produtos
+
+    **Dica:**
+    Esta tool é ideal para análises detalhadas de produtos vendidos. Para relatórios
+    agregados, use `vendas_periodo` que é mais rápido.
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
