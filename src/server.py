@@ -819,7 +819,83 @@ def alterar_cartao(id: str, dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def venda_resumo(empresa_codigo: Optional[list] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, situacao: Optional[str] = None) -> str:
-    """vendaResumo - GET /INTEGRACAO/VENDA_RESUMO"""
+    """
+    **Consulta resumo agregado de vendas por empresa.**
+
+    Esta tool retorna dados totalizados de vendas, agrupados por empresa/filial.
+    É ideal para visão geral e comparação rápida entre filiais.
+
+    **Diferença entre venda_resumo e consultar_venda:**
+    - `venda_resumo`: Retorna dados agregados/totalizados por empresa (mais rápido)
+    - `consultar_venda`: Retorna dados detalhados de cada venda individual (mais completo)
+
+    **Quando usar:**
+    - Para obter totais de vendas por filial rapidamente
+    - Para comparação de performance entre empresas
+    - Para dashboards e relatórios executivos
+    - Quando não precisa de detalhes de cada transação
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha IDs das Empresas (Opcional):** Use `consultar_empresas` se quiser filtrar
+       empresas específicas.
+    2. **Execute a Consulta:** Chame `venda_resumo` com o período desejado.
+
+    **Parâmetros:**
+    - `data_inicial` (str, opcional): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, opcional): Data de fim no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (List[int], opcional): Lista de códigos de empresas para filtrar.
+      Se não informado, retorna resumo de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: [7, 8, 9]
+    - `situacao` (str, opcional): Situação das vendas para filtrar.
+      Valores válidos:
+      * "A" - Ativo/Aberto
+      * "F" - Finalizado
+      * "C" - Cancelado
+      Exemplo: "F"
+
+    **Retorno:**
+    Resumo agregado por empresa contendo:
+    - Código da empresa
+    - Nome da empresa
+    - Quantidade total de vendas
+    - Valor total vendido
+    - Ticket médio
+    - Período consultado
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Resumo de vendas do dia de todas as empresas
+    resumo = venda_resumo(
+        data_inicial="2025-01-10",
+        data_final="2025-01-10"
+    )
+
+    # Cenário 2: Resumo de vendas finalizadas de empresas específicas
+    resumo = venda_resumo(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=[7, 8],
+        situacao="F"
+    )
+
+    # Cenário 3: Comparar performance de filiais no mês
+    resumo_mes = venda_resumo(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31"
+    )
+    # Resultado permite comparação rápida entre filiais
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Dica de Performance:**
+    Use `venda_resumo` quando precisar apenas de totais. É muito mais rápido que
+    `consultar_venda` para grandes volumes de dados.
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -915,7 +991,94 @@ def consultar_venda_forma_pagamento(turno: Optional[int] = None, empresa_codigo:
 
 @mcp.tool()
 def consultar_venda(turno: Optional[int] = None, empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, modelo_documento: Optional[str] = None, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, venda_codigo: Optional[list] = None, situacao: Optional[str] = None, vendas_com_dfe: Optional[bool] = None) -> str:
-    """consultarVenda - GET /INTEGRACAO/VENDA"""
+    """
+    **Consulta vendas realizadas no período especificado.**
+
+    Esta tool retorna todas as vendas (abastecimentos e produtos da loja de conveniência)
+    realizadas em uma ou mais empresas/filiais do posto. É ideal para consultas detalhadas
+    de transações individuais.
+
+    **Diferença entre consultar_venda e venda_resumo:**
+    - `consultar_venda`: Retorna dados detalhados de cada venda individual
+    - `venda_resumo`: Retorna dados agregados/totalizados por empresa
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa:** Use `consultar_empresas` para obter o `empresaCodigo`.
+    2. **Execute a Consulta:** Chame `consultar_venda` com o período e filtros desejados.
+
+    **Parâmetros Principais:**
+    - `data_inicial` (str, opcional): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, opcional): Data de fim no formato YYYY-MM-DD.
+      Deve ser maior ou igual a data_inicial.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna vendas de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `situacao` (str, opcional): Situação da venda para filtrar.
+      Valores válidos:
+      * "A" - Ativo/Aberto (venda em andamento)
+      * "F" - Finalizado (venda concluída)
+      * "C" - Cancelado (venda cancelada)
+      Se não informado, retorna todas as situações.
+      Exemplo: "F"
+    - `tipo_data` (str, opcional): Tipo de data para filtro.
+      Valores: "FISCAL" ou "MOVIMENTO"
+      Default: "FISCAL"
+    - `turno` (int, opcional): Filtrar por turno específico.
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código da última venda retornada.
+
+    **Retorno:**
+    Lista de vendas com informações detalhadas:
+    - Código da venda
+    - Data e hora
+    - Valor total
+    - Situação
+    - Empresa/filial
+    - Cliente (se houver)
+    - Itens da venda
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar vendas do dia atual de todas as empresas
+    vendas = consultar_venda(
+        data_inicial="2025-01-10",
+        data_final="2025-01-10"
+    )
+
+    # Cenário 2: Consultar vendas finalizadas de uma empresa específica
+    vendas = consultar_venda(
+        data_inicial="2025-01-01",
+        data_final="2025-01-10",
+        empresa_codigo=7,
+        situacao="F"
+    )
+
+    # Cenário 3: Consultar vendas com paginação
+    primeira_pagina = consultar_venda(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        limite=100
+    )
+    # Obter próxima página
+    segunda_pagina = consultar_venda(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        limite=100,
+        ultimo_codigo=primeira_pagina[-1]["codigo"]
+    )
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Erros Comuns:**
+    - Erro se data_inicial > data_final
+    - Erro se empresa_codigo não existe
+    - Erro se situacao tem valor inválido
+    """
     params = {}
     if turno is not None:
         params["turno"] = turno
@@ -1719,7 +1882,87 @@ def consultar_esclusao_financeiro(empresa_codigo: Optional[int] = None, data_hor
 
 @mcp.tool()
 def estoque_periodo(data_final: str, empresa_codigo: Optional[int] = None, data_hora_atualizacao: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """estoquePeriodo - GET /INTEGRACAO/ESTOQUE_PERIODO"""
+    """
+    **Consulta o estoque de produtos em uma data específica.**
+
+    Esta tool retorna a posição de estoque (quantidade disponível) de produtos em uma
+    determinada data. É ideal para consultas históricas de estoque e acompanhamento de
+    movimentações.
+
+    **Quando usar:**
+    - Para verificar estoque em uma data específica
+    - Para auditoria de movimentações de estoque
+    - Para relatórios históricos de posição
+    - Para reconciliação de inventário
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` se quiser filtrar
+       por empresa específica.
+    2. **Execute a Consulta:** Chame `estoque_periodo` com a data desejada.
+
+    **Parâmetros:**
+    - `data_final` (str, obrigatório): Data de referência para consulta do estoque.
+      Formato: YYYY-MM-DD
+      Retorna o estoque na posição desta data.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna estoque de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `data_hora_atualizacao` (str, opcional): Filtrar por data/hora de atualização.
+      Formato: YYYY-MM-DD HH:MM:SS
+      Útil para sincronização incremental.
+      Exemplo: "2025-01-10 14:30:00"
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último registro retornado.
+
+    **Retorno:**
+    Lista de produtos com informações de estoque:
+    - Código do produto
+    - Descrição do produto
+    - Quantidade em estoque
+    - Unidade de medida
+    - Empresa/filial
+    - Data de referência
+    - Valor unitário (custo)
+    - Valor total em estoque
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar estoque atual de todas as empresas
+    estoque_hoje = estoque_periodo(
+        data_final="2025-01-10"
+    )
+
+    # Cenário 2: Consultar estoque de uma empresa específica
+    estoque_filial = estoque_periodo(
+        data_final="2025-01-10",
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Consultar estoque histórico (final do mês anterior)
+    estoque_mes_anterior = estoque_periodo(
+        data_final="2024-12-31",
+        empresa_codigo=7
+    )
+
+    # Cenário 4: Sincronização incremental
+    estoque_atualizado = estoque_periodo(
+        data_final="2025-01-10",
+        data_hora_atualizacao="2025-01-10 08:00:00"
+    )
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Diferença entre estoque_periodo e estoque:**
+    - `estoque_periodo`: Consulta estoque em uma data específica (histórico)
+    - `estoque`: Consulta cadastro de estoques (locais de armazenamento)
+
+    **Dica:**
+    Para verificar estoque atual, use a data de hoje em `data_final`.
+    """
     params = {}
     if data_final is not None:
         params["dataFinal"] = data_final
@@ -2647,7 +2890,74 @@ def pedido_status(pedidos: Optional[list] = None) -> str:
 
 @mcp.tool()
 def vendas_periodo(cupom_cancelado: bool, ordenacao_por: str, data_inicial: str, data_final: str, tipo_data: str, agrupamento_por: Optional[str] = None, prazo: Optional[list] = None, turno: Optional[list] = None, hora_acompanha_data: Optional[bool] = None, hora_inicial: Optional[str] = None, hora_final: Optional[str] = None, grupo_produto: Optional[list] = None, ecf: Optional[list] = None, funcionario: Optional[list] = None, produto: Optional[list] = None, cliente: Optional[int] = None, pdv_caixa: Optional[list] = None, tipo_produto: Optional[list] = None, filial: Optional[list] = None, estoque: Optional[list] = None, tipo_venda: Optional[str] = None, apresenta_preco_medio: Optional[bool] = None, grupo_cliente: Optional[list] = None, consolidar: Optional[bool] = None, sub_grupo_produto_nivel1: Optional[list] = None, sub_grupo_produto_nivel2: Optional[list] = None, sub_grupo_produto_nivel3: Optional[list] = None, agrupar_totalizadores: Optional[str] = None, depto_selcon: Optional[str] = None, pdv_gerou_venda: Optional[list] = None, centro_custo: Optional[list] = None) -> str:
-    """vendasPeriodo - GET /INTEGRACAO/RELATORIO/VENDA_PERIODO"""
+    """
+    **Gera um relatório detalhado de vendas por período.**
+
+    Esta tool é uma das mais poderosas e complexas, permitindo a extração de dados de vendas
+    com múltiplos filtros, agrupamentos e ordenações. Para utilizá-la corretamente, é crucial
+    entender suas dependências.
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa:** Primeiro, use a tool `consultar_empresas` para listar as
+       empresas (filiais) e obter o `empresaCodigo` desejado.
+    2. **Consulte IDs para Filtros (Opcional):** Se precisar filtrar por produto, cliente,
+       funcionário, etc., use as tools de consulta correspondentes (`consultar_produto`,
+       `consultar_cliente`) para obter os IDs antes de chamar esta tool.
+    3. **Execute a Consulta:** Chame `vendas_periodo` com as datas, o `empresaCodigo`
+       (no parâmetro `filial`) e outros filtros desejados.
+
+    **Parâmetros Principais:**
+    - `data_inicial` (str, obrigatório): Data de início do período (formato: 'YYYY-MM-DD').
+    - `data_final` (str, obrigatório): Data de fim do período (formato: 'YYYY-MM-DD').
+    - `filial` (List[int], obrigatório): Lista de IDs de empresas/filiais a serem incluídas.
+      Obtenha os IDs com a tool `consultar_empresas`.
+    - `tipo_data` (str, obrigatório): Define a referência de data. Valores: 'FISCAL' ou 'MOVIMENTO'.
+    - `ordenacao_por` (str, obrigatório): Critério de ordenação. Valores: 'REFERENCIA',
+      'PRODUTO', 'PARTICIPACAO', 'QUANTIDADE_VENDIDA'.
+    - `cupom_cancelado` (bool, obrigatório): Se `True`, inclui cupons cancelados no relatório.
+
+    **Parâmetros de Agrupamento e Filtro (Opcionais):**
+    - `agrupamento_por` (str): Agrupa os resultados. Ex: 'PRODUTO', 'CLIENTE', 'DIA', 'MES'.
+      Default: 'SEM_AGRUPAMENTO'.
+    - `produto` (List[int]): Lista de IDs de produtos para filtrar. Use `consultar_produto`
+      para obter os IDs.
+    - `cliente` (int): ID de um cliente específico. Use `consultar_cliente` para obter o ID.
+    - `funcionario` (List[int]): Lista de IDs de funcionários. Use `consultar_funcionario`
+      para obter os IDs.
+    - `grupo_produto` (List[int]): Lista de IDs de grupos de produtos. Use
+      `consultar_grupo_produto` para obter os IDs.
+    - `tipo_produto` (List[str]): Filtra por tipo de produto. Ex: ['COMBUSTIVEL'],
+      ['PRODUTO', 'SERVICO'].
+    - `depto_selcon` (str): Filtra por departamento. Valores: 'PISTA' (combustíveis),
+      'LOJA' (conveniência), 'AMBOS'.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário: Gerar um relatório de vendas de combustível para a filial 1, agrupado por produto.
+
+    # 1. Obter ID da empresa
+    # empresas = consultar_empresas()
+    # id_filial_1 = 7  # Supondo que o ID da filial desejada seja 7
+
+    # 2. Chamar a tool de vendas
+    relatorio = vendas_periodo(
+        data_inicial='2025-12-01',
+        data_final='2025-12-31',
+        filial=[7],
+        tipo_data='FISCAL',
+        ordenacao_por='QUANTIDADE_VENDIDA',
+        cupom_cancelado=False,
+        agrupamento_por='PRODUTO',
+        tipo_produto=['COMBUSTIVEL']
+    )
+    print(relatorio)
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_empresas` (para obter filial)
+    - Opcional: `consultar_produto`, `consultar_cliente`, `consultar_funcionario`,
+      `consultar_grupo_produto` (para filtros específicos)
+    """
     params = {}
     if cupom_cancelado is not None:
         params["cupomCancelado"] = cupom_cancelado
