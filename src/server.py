@@ -1328,7 +1328,35 @@ def incluir_ofx(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def consultar_grupo_cliente(grupo_codigo: Optional[int] = None, grupo_codigo_externo: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarGrupoCliente - GET /INTEGRACAO/GRUPO_CLIENTE"""
+    """
+    **Consulta grupos de clientes cadastrados.**
+
+    Retorna os grupos de clientes (VIP, Atacado, Varejo, etc.) para segmentação.
+
+    **Quando usar:**
+    - Para listar grupos de clientes
+    - Para relatórios por segmento
+    - Para filtrar clientes por grupo
+
+    **Parâmetros:**
+    - `grupo_codigo` (int, opcional): Código de um grupo específico
+    - `grupo_codigo_externo` (str, opcional): Código externo
+    - `limite` (int, opcional): Número máximo de registros
+
+    **Retorno:**
+    - Código do grupo
+    - Descrição (VIP, Atacado, Varejo, etc.)
+    - Desconto padrão
+    - Prazo padrão
+
+    **Exemplo:**
+    ```python
+    grupos = consultar_grupo_cliente()
+    ```
+
+    **Tools Relacionadas:**
+    - `consultar_cliente` - Clientes por grupo
+    """
     params = {}
     if grupo_codigo is not None:
         params["grupoCodigo"] = grupo_codigo
@@ -2363,7 +2391,26 @@ def consultar_produto(empresa_codigo: Optional[int] = None, produto_codigo: Opti
 
 @mcp.tool()
 def consultar_prazos(prazo_codigo: Optional[int] = None, prazo_codigo_externo: Optional[str] = None) -> str:
-    """consultarPrazos - GET /INTEGRACAO/PRAZOS"""
+    """
+    **Consulta prazos de pagamento cadastrados.**
+
+    Retorna os prazos de pagamento (30/60/90 dias, à vista, etc.) disponíveis.
+
+    **Parâmetros:**
+    - `prazo_codigo` (int, opcional): Código de um prazo específico
+    - `prazo_codigo_externo` (str, opcional): Código externo
+
+    **Retorno:**
+    - Código do prazo
+    - Descrição (À vista, 30 dias, 30/60 dias, etc.)
+    - Número de parcelas
+    - Dias entre parcelas
+
+    **Exemplo:**
+    ```python
+    prazos = consultar_prazos()
+    ```
+    """
     params = {}
     if prazo_codigo is not None:
         params["prazoCodigo"] = prazo_codigo
@@ -2377,7 +2424,26 @@ def consultar_prazos(prazo_codigo: Optional[int] = None, prazo_codigo_externo: O
 
 @mcp.tool()
 def consultar_plano_conta_gerencial(plano_conta_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarPlanoContaGerencial - GET /INTEGRACAO/PLANO_CONTA_GERENCIAL"""
+    """
+    **Consulta plano de contas gerencial.**
+
+    Retorna o plano de contas gerencial para classificação de receitas e despesas.
+
+    **Parâmetros:**
+    - `plano_conta_codigo` (int, opcional): Código específico
+    - `limite` (int, opcional): Número máximo de registros
+
+    **Retorno:**
+    - Código da conta
+    - Descrição
+    - Tipo (receita/despesa)
+    - Conta pai (hierarquia)
+
+    **Exemplo:**
+    ```python
+    contas = consultar_plano_conta_gerencial()
+    ```
+    """
     params = {}
     if plano_conta_codigo is not None:
         params["planoContaCodigo"] = plano_conta_codigo
@@ -2393,7 +2459,25 @@ def consultar_plano_conta_gerencial(plano_conta_codigo: Optional[int] = None, ul
 
 @mcp.tool()
 def consultar_plano_conta_contabil(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarPlanoContaContabil - GET /INTEGRACAO/PLANO_CONTA_CONTABIL"""
+    """
+    **Consulta plano de contas contábil.**
+
+    Retorna o plano de contas contábil para lançamentos contábeis.
+
+    **Parâmetros:**
+    - `limite` (int, opcional): Número máximo de registros
+
+    **Retorno:**
+    - Código da conta
+    - Descrição
+    - Tipo (ativo, passivo, receita, despesa)
+    - Nível hierárquico
+
+    **Exemplo:**
+    ```python
+    contas = consultar_plano_conta_contabil()
+    ```
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
@@ -3044,7 +3128,37 @@ def consultar_fornecedor(retorna_observacoes: Optional[bool] = None, data_hora_a
 
 @mcp.tool()
 def consultar_forma_pagamento(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarFormaPagamento - GET /INTEGRACAO/FORMA_PAGAMENTO"""
+    """
+    **Consulta formas de pagamento cadastradas.**
+
+    Retorna as formas de pagamento (dinheiro, cartão, PIX, boleto, etc.) disponíveis no sistema.
+
+    **Quando usar:**
+    - Para listar formas de pagamento aceitas
+    - Para obter IDs antes de registrar vendas/recebimentos
+    - Para relatórios de vendas por forma de pagamento
+
+    **Parâmetros:**
+    - `limite` (int, opcional): Número máximo de registros
+    - `ultimo_codigo` (int, opcional): Para paginação
+
+    **Retorno:**
+    - Código da forma de pagamento
+    - Descrição (Dinheiro, Cartão Crédito, PIX, etc.)
+    - Tipo (dinheiro, cartão, cheque, etc.)
+    - Status (ativo/inativo)
+
+    **Exemplo:**
+    ```python
+    formas = consultar_forma_pagamento()
+    for forma in formas:
+        print(f"{forma['codigo']}: {forma['descricao']}")
+    ```
+
+    **Tools Relacionadas:**
+    - `consultar_venda_forma_pagamento` - Vendas por forma de pagamento
+    - `receber_titulo` - Usar forma de pagamento em recebimentos
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
@@ -3695,7 +3809,36 @@ def consultar_cheque(data_inicial: str, data_final: str, turno: Optional[int] = 
 
 @mcp.tool()
 def consultar_centro_custo(centro_custo_codigo_externo: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarCentroCusto - GET /INTEGRACAO/CENTRO_CUSTO"""
+    """
+    **Consulta centros de custo cadastrados.**
+
+    Retorna os centros de custo para classificação de despesas e receitas por departamento/área.
+
+    **Quando usar:**
+    - Para listar centros de custo
+    - Para relatórios gerenciais por departamento
+    - Para classificação de despesas
+
+    **Parâmetros:**
+    - `centro_custo_codigo_externo` (str, opcional): Código externo
+    - `limite` (int, opcional): Número máximo de registros
+
+    **Retorno:**
+    - Código do centro de custo
+    - Descrição (Administração, Vendas, Operações, etc.)
+    - Status (ativo/inativo)
+
+    **Exemplo:**
+    ```python
+    centros = consultar_centro_custo()
+    for centro in centros:
+        print(f"{centro['codigo']}: {centro['descricao']}")
+    ```
+
+    **Tools Relacionadas:**
+    - `consultar_lancamento_contabil` - Lançamentos por centro de custo
+    - `consultar_dre` - DRE por centro de custo
+    """
     params = {}
     if centro_custo_codigo_externo is not None:
         params["centroCustoCodigoExterno"] = centro_custo_codigo_externo
