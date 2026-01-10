@@ -1202,7 +1202,93 @@ def troca_preco(data_inicial: str, data_final: str, realizada: Optional[bool] = 
 
 @mcp.tool()
 def consultar_tanque(tanque_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarTanque - GET /INTEGRACAO/TANQUE"""
+    """
+    **Consulta tanques de armazenamento de combustível.**
+
+    Esta tool retorna a lista de tanques (reservatórios subterrâneos que armazenam
+    combustíveis) cadastrados no sistema. Cada tanque armazena um tipo específico de
+    combustível e abastece uma ou mais bombas.
+
+    **Quando usar:**
+    - Para listar tanques de uma empresa/filial
+    - Para obter ID de tanque para relatórios de estoque
+    - Para controle de capacidade e nível de combustível
+    - Para gestão de ativos e manutenção
+
+    **Hierarquia de Equipamentos:**
+    **Tanque** (armazenamento) → Bomba → Bico (abastecimento)
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_tanque` com os filtros desejados.
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna tanques de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `tanque_codigo` (int, opcional): Código de um tanque específico.
+      Útil para buscar detalhes de um tanque conhecido.
+      Exemplo: 1
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último tanque retornado.
+
+    **Retorno:**
+    Lista de tanques contendo:
+    - Código do tanque
+    - Descrição/identificação (ex: "Tanque 1 - Gasolina")
+    - Produto combustível armazenado
+    - Capacidade total (litros)
+    - Nível atual (litros)
+    - Percentual de ocupação
+    - Empresa/filial
+    - Status (ativo/inativo)
+    - Bombas vinculadas
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todos os tanques de uma empresa
+    tanques = consultar_tanque(
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Buscar um tanque específico
+    tanque = consultar_tanque(
+        tanque_codigo=1,
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Verificar níveis de combustível
+    tanques = consultar_tanque(empresa_codigo=7)
+    for tanque in tanques:
+        produto = tanque["produtoDescricao"]
+        nivel = tanque["nivelAtual"]
+        capacidade = tanque["capacidadeTotal"]
+        percentual = (nivel / capacidade) * 100
+        
+        if percentual < 20:
+            print(f"ALERTA: {produto} com apenas {percentual:.1f}% de capacidade")
+
+    # Cenário 4: Relatório de estoque por tanque
+    tanques = consultar_tanque(empresa_codigo=7)
+    for tanque in tanques:
+        print(f"Tanque: {tanque['descricao']}")
+        print(f"Produto: {tanque['produtoDescricao']}")
+        print(f"Estoque: {tanque['nivelAtual']} litros")
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Tools Relacionadas:**
+    - `consultar_bomba` - Consulta bombas abastecidas pelos tanques
+    - `consultar_bico` - Consulta bicos de abastecimento
+    - `consultar_produto_combustivel` - Consulta produtos armazenados
+
+    **Dica:**
+    Use esta tool para monitoramento de estoque de combustível e alertas de
+    reabastecimento. Tanques com nível abaixo de 20% geralmente precisam de pedido.
+    """
     params = {}
     if tanque_codigo is not None:
         params["tanqueCodigo"] = tanque_codigo
@@ -1486,7 +1572,99 @@ def consultar_trr_pedido(empresa_codigo: Optional[int] = None, data_inicial: Opt
 
 @mcp.tool()
 def consultar_pdv(pdv_referencia: Optional[str] = None, pdv_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarPdv - GET /INTEGRACAO/PDV"""
+    """
+    **Consulta PDVs (Pontos de Venda / Caixas) cadastrados.**
+
+    Esta tool retorna a lista de PDVs/Caixas (terminais onde as vendas são registradas)
+    cadastrados no sistema. Cada PDV pode ser um caixa da loja de conveniência ou um
+    terminal de controle da pista.
+
+    **Quando usar:**
+    - Para listar PDVs/caixas de uma empresa/filial
+    - Para obter ID de PDV antes de filtrar vendas por caixa
+    - Para relatórios de performance por caixa
+    - Para controle de equipamentos e terminais
+
+    **Tipos de PDV:**
+    - **Caixa da Loja**: Terminal da loja de conveniência
+    - **Caixa da Pista**: Terminal de controle de abastecimentos
+    - **PDV Móvel**: Terminais portáteis (se aplicável)
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresas` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_pdv` com os filtros desejados.
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, opcional): Código da empresa/filial para filtrar.
+      Se não informado, retorna PDVs de todas as empresas.
+      Obter via: `consultar_empresas`
+      Exemplo: 7
+    - `pdv_codigo` (int, opcional): Código de um PDV específico.
+      Útil para buscar detalhes de um PDV conhecido.
+      Exemplo: 1
+    - `pdv_referencia` (str, opcional): Referência/identificação externa do PDV.
+      Exemplo: "CAIXA-01"
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último PDV retornado.
+
+    **Retorno:**
+    Lista de PDVs contendo:
+    - Código do PDV
+    - Descrição/identificação (ex: "Caixa 1", "PDV Loja")
+    - Referência externa
+    - Empresa/filial
+    - Tipo de PDV (loja/pista)
+    - Status (ativo/inativo)
+    - Operador/funcionário atual (se em uso)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todos os PDVs de uma empresa
+    pdvs = consultar_pdv(
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Buscar um PDV específico por código
+    pdv = consultar_pdv(
+        pdv_codigo=1,
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Buscar PDV por referência
+    pdv = consultar_pdv(
+        pdv_referencia="CAIXA-01",
+        empresa_codigo=7
+    )
+
+    # Cenário 4: Relatório de vendas por caixa
+    pdvs = consultar_pdv(empresa_codigo=7)
+    pdv_ids = [p["codigo"] for p in pdvs]
+
+    # Usar IDs em relatório de vendas
+    vendas_por_caixa = vendas_periodo(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        filial=[7],
+        pdv_caixa=pdv_ids,
+        tipo_data="FISCAL",
+        ordenacao_por="QUANTIDADE_VENDIDA",
+        cupom_cancelado=False,
+        agrupamento_por="SEM_AGRUPAMENTO"
+    )
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresas` (para obter empresa_codigo)
+
+    **Tools Relacionadas:**
+    - `vendas_periodo` - Filtrar vendas por PDV/caixa
+    - `consultar_venda` - Consultar vendas com filtro de PDV
+    - `consultar_funcionario` - Consultar operadores de caixa
+
+    **Dica:**
+    Use esta tool para identificar caixas ativos e gerar relatórios de performance
+    por terminal. É útil para análise de produtividade e controle operacional.
+    """
     params = {}
     if pdv_referencia is not None:
         params["pdvReferencia"] = pdv_referencia
