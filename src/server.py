@@ -505,7 +505,27 @@ def alterar_produto(id: str, dados: Dict[str, Any], empresa_codigo: Optional[int
 
 @mcp.tool()
 def consultar_transferencia_bancaria(data_inicial: str, data_final: str, empresa_codigo: Optional[int] = None, venda_codigo: Optional[int] = None, tipo_inclusao: Optional[int] = None, conta_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarTransferenciaBancaria - GET /INTEGRACAO/TRANSFERENCIA_BANCARIA"""
+    """
+    **Consulta transferências bancárias.**
+
+    Esta tool retorna transferências bancárias registradas no sistema.
+
+    **Parâmetros:**
+    - `data_inicial` (str, obrigatório): Data inicial (YYYY-MM-DD)
+    - `data_final` (str, obrigatório): Data final (YYYY-MM-DD)
+    - `empresa_codigo` (int, opcional): Código da empresa
+    - `conta_codigo` (int, opcional): Código da conta bancária
+    - `venda_codigo` (int, opcional): Código da venda relacionada
+
+    **Exemplo:**
+    ```python
+    transferencias = consultar_transferencia_bancaria(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+    ```
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -1099,7 +1119,27 @@ def incluir_cliente_1(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def consultar_movimento_conta(empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, mostra_saldo: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, documento_origem_codigo: Optional[int] = None, tipo_documento_origem: Optional[str] = None) -> str:
-    """consultarMovimentoConta - GET /INTEGRACAO/MOVIMENTO_CONTA"""
+    """
+    **Consulta movimentações de contas bancárias.**
+
+    Esta tool retorna movimentações (entradas e saídas) de contas bancárias.
+
+    **Parâmetros:**
+    - `data_inicial` (str, opcional): Data inicial (YYYY-MM-DD)
+    - `data_final` (str, opcional): Data final (YYYY-MM-DD)
+    - `empresa_codigo` (int, opcional): Código da empresa
+    - `mostra_saldo` (bool, opcional): Se True, mostra saldo
+
+    **Exemplo:**
+    ```python
+    movimentos = consultar_movimento_conta(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7,
+        mostra_saldo=True
+    )
+    ```
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -1127,7 +1167,31 @@ def consultar_movimento_conta(empresa_codigo: Optional[int] = None, data_inicial
 
 @mcp.tool()
 def incluir_movimento_conta(dados: Dict[str, Any]) -> str:
-    """incluirMovimentoConta - POST /INTEGRACAO/MOVIMENTO_CONTA"""
+    """
+    **Cria uma nova movimentação de conta bancária.**
+
+    Esta tool permite registrar manualmente movimentações bancárias (entradas/saídas).
+
+    **Parâmetros (via objeto `dados`):**
+    - `contaCodigo` (int): Código da conta bancária
+    - `dataMovimento` (str): Data da movimentação (YYYY-MM-DD)
+    - `tipoMovimento` (str): "E" (Entrada) ou "S" (Saída)
+    - `valor` (float): Valor da movimentação
+    - `historico` (str): Descrição da movimentação
+
+    **Exemplo:**
+    ```python
+    incluir_movimento_conta(
+        dados={
+            "contaCodigo": 1,
+            "dataMovimento": "2025-01-10",
+            "tipoMovimento": "E",
+            "valor": 5000.00,
+            "historico": "Depósito - Recebimento de cliente"
+        }
+    )
+    ```
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/MOVIMENTO_CONTA", data=dados, params=params)
@@ -2172,7 +2236,74 @@ def consultar_produto_lmc_lmp(codigo_produt_lmc: Optional[int] = None) -> str:
 
 @mcp.tool()
 def consultar_produto_estoque(empresa_codigo: int, data_hora: Optional[str] = None, grupo_codigo: Optional[list] = None, produto_codigo: Optional[list] = None) -> str:
-    """consultarProdutoEstoque - GET /INTEGRACAO/PRODUTO_ESTOQUE"""
+    """
+    **Consulta estoque de produtos.**
+
+    Esta tool retorna o estoque atual de produtos. É essencial para controle de estoque
+    e gestão de inventário.
+
+    **Quando usar:**
+    - Para consultar estoque atual de produtos
+    - Para relatórios de estoque
+    - Para verificação de disponibilidade
+    - Para análise de giro de estoque
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, obrigatório): Código da empresa.
+      Obter via: `consultar_empresas`
+    - `produto_codigo` (List[int], opcional): Lista de códigos de produtos específicos.
+      Obter via: `consultar_produto`
+    - `grupo_codigo` (List[int], opcional): Lista de códigos de grupos de produtos.
+    - `data_hora` (str, opcional): Data/hora para consulta histórica (YYYY-MM-DD HH:MM:SS).
+
+    **Retorno:**
+    Lista de produtos com estoque contendo:
+    - Código do produto
+    - Descrição do produto
+    - Quantidade em estoque
+    - Estoque mínimo
+    - Estoque máximo
+    - Custo médio
+    - Valor total do estoque
+    - Última atualização
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar estoque de todos os produtos
+    estoque = consultar_produto_estoque(
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Consultar estoque de produtos específicos
+    estoque = consultar_produto_estoque(
+        empresa_codigo=7,
+        produto_codigo=[123, 456, 789]
+    )
+
+    # Cenário 3: Produtos com estoque baixo
+    estoque = consultar_produto_estoque(empresa_codigo=7)
+    estoque_baixo = [
+        p for p in estoque
+        if p["quantidadeEstoque"] < p["estoqueMinimo"]
+    ]
+    
+    for produto in estoque_baixo:
+        print(f"ALERTA: {produto['descricao']} - Estoque: {produto['quantidadeEstoque']}")
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_empresas` (para obter empresa_codigo)
+    - Opcional: `consultar_produto` (para obter produto_codigo)
+
+    **Tools Relacionadas:**
+    - `consultar_produto` - Consultar detalhes dos produtos
+    - `produto_inventario` - Registrar inventário
+    - `reajustar_estoque_produto_combustivel` - Ajustar estoque de combustíveis
+
+    **Dica:**
+    Use esta tool para monitoramento de estoque e alertas de reabastecimento.
+    Produtos com estoque abaixo do mínimo precisam de pedido de compra.
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -3167,7 +3298,35 @@ def dfe_xml(modelo_documento: int, numero_documento: int, empresa_codigo: int, s
 
 @mcp.tool()
 def consultar_conta(empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarConta - GET /INTEGRACAO/CONTA"""
+    """
+    **Consulta contas bancárias cadastradas.**
+
+    Esta tool retorna a lista de contas bancárias (contas correntes, poupança, etc.)
+    cadastradas no sistema.
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, opcional): Código da empresa
+    - `limite` (int, opcional): Número máximo de registros
+    - `ultimo_codigo` (int, opcional): Para paginação
+
+    **Retorno:**
+    Lista de contas contendo:
+    - Código da conta
+    - Banco
+    - Agência
+    - Número da conta
+    - Tipo de conta
+    - Saldo atual
+
+    **Exemplo:**
+    ```python
+    contas = consultar_conta(empresa_codigo=7)
+    ```
+
+    **Tools Relacionadas:**
+    - `consultar_movimento_conta` - Consultar movimentações
+    - `incluir_movimento_conta` - Criar movimentação
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
