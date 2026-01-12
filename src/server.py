@@ -7900,7 +7900,39 @@ def receber_titulo_cartao(id: str, dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def incluir_pedido(dados: Dict[str, Any]) -> str:
-    """incluirPedido - POST /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO"""
+        """
+    **Cria um novo pedido de venda.**
+    
+    Registra pedidos de venda que serão posteriormente faturados, permitindo
+    gestão de orçamentos e controle de vendas futuras.
+    
+    **Quando usar:**
+    - Registrar orçamentos
+    - Criar pedidos para faturamento futuro
+    - Vendas com entrega programada
+    - Controle de vendas B2B
+    
+    **Parâmetros:**
+    - `cliente_codigo` (int): Cliente do pedido
+    - `itens` (list): Lista de produtos e quantidades
+    - `data_entrega` (str, opcional): Data prevista
+    - Outros parâmetros de configuração
+    
+    **Exemplo:**
+    ```python
+    pedido = incluir_pedido(
+        cliente_codigo=100,
+        itens=[
+            {"produto_codigo": 50, "quantidade": 10, "preco": 25.00},
+            {"produto_codigo": 51, "quantidade": 5, "preco": 50.00}
+        ],
+        data_entrega="2026-01-20"
+    )
+    print(f"Pedido criado: {pedido['numero']}")
+    ```
+    
+    **Tools Relacionadas:** `consultar_pedido`, `pedido_faturar`
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO", data=dados, params=params)
@@ -7911,7 +7943,34 @@ def incluir_pedido(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def pedido_faturar(id: str, dados: Dict[str, Any]) -> str:
-    """pedidoFaturar - POST /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/FATURAR"""
+        """
+    **Fatura um pedido de venda, gerando nota fiscal.**
+    
+    Converte um pedido em venda efetiva, gerando a nota fiscal correspondente
+    e atualizando o estoque.
+    
+    **Quando usar:**
+    - Faturar pedidos aprovados
+    - Gerar notas fiscais de pedidos
+    - Efetivar vendas
+    - Processar entregas
+    
+    **Parâmetros:**
+    - `pedido_codigo` (int): Código do pedido a faturar
+    - `data_faturamento` (str, opcional): Data do faturamento
+    - `forma_pagamento` (str): Forma de pagamento
+    
+    **Exemplo:**
+    ```python
+    nota = pedido_faturar(
+        pedido_codigo=1234,
+        forma_pagamento="cartao_credito"
+    )
+    print(f"NFe gerada: {nota['chave']}")
+    ```
+    
+    **Tools Relacionadas:** `consultar_pedido`, `pedido_danfe`, `pedido_xml`
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/FATURAR", data=dados, params=params)
@@ -7922,7 +7981,32 @@ def pedido_faturar(id: str, dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def pedido_danfe(id: str) -> str:
-    """pedidoDanfe - POST /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/DANFE"""
+        """
+    **Gera DANFE (Documento Auxiliar da NFe) de um pedido faturado.**
+    
+    Produz o documento impresso da nota fiscal eletrônica, essencial para
+    transporte de mercadorias e entrega ao cliente.
+    
+    **Quando usar:**
+    - Imprimir nota fiscal para entrega
+    - Gerar documento para transporte
+    - Arquivo para cliente
+    - Compliance fiscal
+    
+    **Parâmetros:**
+    - `pedido_codigo` (int): Código do pedido faturado
+    - `formato` (str, opcional): "pdf" ou "html"
+    
+    **Exemplo:**
+    ```python
+    danfe = pedido_danfe(pedido_codigo=1234, formato="pdf")
+    # Salvar ou enviar o PDF ao cliente
+    with open("danfe_1234.pdf", "wb") as f:
+        f.write(danfe['conteudo'])
+    ```
+    
+    **Tools Relacionadas:** `pedido_faturar`, `pedido_xml`
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/DANFE", data=dados, params=params)
@@ -8016,7 +8100,34 @@ def consultar_produto_combustivel() -> str:
 
 @mcp.tool()
 def consultar_pedido(id: str) -> str:
-    """consultarPedido - GET /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}"""
+        """
+    **Consulta pedidos de venda emitidos.**
+    
+    Gerencia pedidos de venda desde a criação até o faturamento, essencial para
+    controle comercial e gestão de entregas.
+    
+    **Quando usar:**
+    - Listar pedidos pendentes de faturamento
+    - Acompanhar status de pedidos
+    - Gestão de entregas
+    - Relatórios comerciais
+    
+    **Parâmetros:**
+    - `pedido_codigo` (int, opcional): Filtrar por pedido específico
+    - `cliente_codigo` (int, opcional): Filtrar por cliente
+    - `status` (str, opcional): "pendente", "faturado", "cancelado"
+    - `data_inicial`, `data_final` (str, opcional): Período
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    pedidos = consultar_pedido(status="pendente", limite=50)
+    for pedido in pedidos:
+        print(f"Pedido {pedido['numero']}: {pedido['cliente']} - R$ {pedido['valor_total']:.2f}")
+    ```
+    
+    **Tools Relacionadas:** `incluir_pedido`, `pedido_faturar`, `pedido_status`
+    """
     params = {}
 
     result = client.get("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}", params=params)
@@ -8027,7 +8138,32 @@ def consultar_pedido(id: str) -> str:
 
 @mcp.tool()
 def excluir_pedido(id: str) -> str:
-    """excluirPedido - DELETE /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}"""
+        """
+    **Exclui/cancela um pedido de venda.**
+    
+    Remove pedidos que não serão mais faturados, mantendo histórico de
+    cancelamentos para auditoria.
+    
+    **Quando usar:**
+    - Cancelar pedidos não faturados
+    - Corrigir pedidos duplicados
+    - Remover orçamentos rejeitados
+    - Manutenção de base de pedidos
+    
+    **Parâmetros:**
+    - `pedido_codigo` (int): Código do pedido a excluir
+    - `motivo` (str, opcional): Motivo do cancelamento
+    
+    **Exemplo:**
+    ```python
+    excluir_pedido(
+        pedido_codigo=1234,
+        motivo="Cliente cancelou a compra"
+    )
+    ```
+    
+    **Tools Relacionadas:** `consultar_pedido`, `pedido_status`
+    """
     endpoint = f"/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}"
     params = {}
 
@@ -8039,7 +8175,32 @@ def excluir_pedido(id: str) -> str:
 
 @mcp.tool()
 def pedido_xml(id: str) -> str:
-    """pedidoXml - GET /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/XML"""
+        """
+    **Retorna o XML da NFe de um pedido faturado.**
+    
+    Fornece o arquivo XML da nota fiscal eletrônica, necessário para validação
+    fiscal e integração com sistemas contábeis.
+    
+    **Quando usar:**
+    - Validar nota fiscal
+    - Integração contábil
+    - Auditoria fiscal
+    - Envio ao cliente (XML + DANFE)
+    
+    **Parâmetros:**
+    - `pedido_codigo` (int): Código do pedido faturado
+    
+    **Exemplo:**
+    ```python
+    xml = pedido_xml(pedido_codigo=1234)
+    print(f"Chave NFe: {xml['chave']}")
+    # Salvar XML
+    with open(f"nfe_{xml['chave']}.xml", "w") as f:
+        f.write(xml['conteudo'])
+    ```
+    
+    **Tools Relacionadas:** `pedido_faturar`, `pedido_danfe`
+    """
     params = {}
 
     result = client.get("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/XML", params=params)
@@ -8050,7 +8211,32 @@ def pedido_xml(id: str) -> str:
 
 @mcp.tool()
 def pedido_status(pedidos: Optional[list] = None) -> str:
-    """pedidoStatus - GET /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/STATUS"""
+        """
+    **Consulta o status atual de um pedido.**
+    
+    Fornece informações detalhadas sobre o estado do pedido no fluxo de vendas,
+    incluindo etapas de aprovação, faturamento e entrega.
+    
+    **Quando usar:**
+    - Acompanhar progresso de pedidos
+    - Verificar etapa atual
+    - Identificar pendências
+    - Relatórios de status
+    
+    **Parâmetros:**
+    - `pedido_codigo` (int): Código do pedido
+    
+    **Exemplo:**
+    ```python
+    status = pedido_status(pedido_codigo=1234)
+    print(f"Status: {status['descricao']}")
+    print(f"Etapa: {status['etapa']}")
+    if status['pendencias']:
+        print(f"Pendências: {', '.join(status['pendencias'])}")
+    ```
+    
+    **Tools Relacionadas:** `consultar_pedido`, `pedido_faturar`
+    """
     params = {}
     if pedidos is not None:
         params["pedidos"] = pedidos
