@@ -3225,7 +3225,33 @@ def consultar_vale_funcionario(data_inicial: str, data_final: str, empresa_codig
 
 @mcp.tool()
 def consultar_usuario_empresa(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarUsuarioEmpresa - GET /INTEGRACAO/USUARIO_EMPRESA"""
+        """
+    **Consulta vínculos de usuários com empresas/unidades de negócio.**
+    
+    Gerencia o relacionamento multi-tenant entre usuários e unidades de negócio,
+    controlando quais empresas cada usuário pode acessar.
+    
+    **Quando usar:**
+    - Listar empresas de um usuário
+    - Configurar acessos multi-empresa
+    - Auditoria de permissões
+    - Gestão de multi-tenancy
+    
+    **Parâmetros:**
+    - `usuario_codigo` (int, opcional): Filtrar por usuário
+    - `empresa_codigo` (int, opcional): Filtrar por empresa
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    vinculos = consultar_usuario_empresa(usuario_codigo=123)
+    print(f"Usuário tem acesso a {len(vinculos)} empresas:")
+    for vinculo in vinculos:
+        print(f"  - {vinculo['empresa_nome']}")
+    ```
+    
+    **Tools Relacionadas:** `consultar_usuario`, `consultar_empresa`
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
@@ -3239,7 +3265,32 @@ def consultar_usuario_empresa(ultimo_codigo: Optional[int] = None, limite: Optio
 
 @mcp.tool()
 def consultar_usuario(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarUsuario - GET /INTEGRACAO/USUARIO"""
+        """
+    **Consulta usuários do sistema.**
+    
+    Permite gerenciar os usuários com acesso ao sistema, incluindo informações de
+    permissões e vínculos com unidades de negócio.
+    
+    **Quando usar:**
+    - Listar usuários ativos
+    - Auditoria de acessos
+    - Gerenciamento de permissões
+    - Vincular usuários a empresas
+    
+    **Parâmetros:**
+    - `usuario_codigo` (int, opcional): Filtrar por usuário específico
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    usuarios = consultar_usuario(limite=50)
+    for user in usuarios:
+        status = "Ativo" if user['ativo'] else "Inativo"
+        print(f"{user['login']}: {user['nome']} - {status}")
+    ```
+    
+    **Tools Relacionadas:** `consultar_usuario_empresa`, `consultar_funcionario`
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
@@ -4914,7 +4965,31 @@ def consultar_grupo_meta(ultimo_codigo: Optional[int] = None, limite: Optional[i
 
 @mcp.tool()
 def consultar_grupo(grupo_codigo_externo: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarGrupo - GET /INTEGRACAO/GRUPO"""
+        """
+    **Consulta grupos de produtos cadastrados.**
+    
+    Permite gerenciar a estrutura de categorização de produtos, essencial para organização
+    do catálogo e análises por categoria.
+    
+    **Quando usar:**
+    - Listar categorias de produtos
+    - Estruturar catálogo de produtos
+    - Análises por grupo/categoria
+    - Configuração de metas por grupo
+    
+    **Parâmetros:**
+    - `grupo_codigo` (int, opcional): Filtrar por grupo específico
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    grupos = consultar_grupo(limite=30)
+    for grupo in grupos:
+        print(f"{grupo['codigo']}: {grupo['nome']} ({grupo['qtd_produtos']} produtos)")
+    ```
+    
+    **Tools Relacionadas:** `consultar_sub_grupo_rede`, `consultar_produto`, `consultar_grupo_meta`
+    """
     params = {}
     if grupo_codigo_externo is not None:
         params["grupoCodigoExterno"] = grupo_codigo_externo
@@ -4930,7 +5005,31 @@ def consultar_grupo(grupo_codigo_externo: Optional[str] = None, ultimo_codigo: O
 
 @mcp.tool()
 def consultar_funcoes(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarFuncoes - GET /INTEGRACAO/FUNCOES"""
+        """
+    **Consulta funções/cargos de funcionários cadastrados.**
+    
+    Permite gerenciar os cargos e funções utilizados no cadastro de funcionários,
+    essencial para organização hierárquica e controle de permissões.
+    
+    **Quando usar:**
+    - Listar cargos disponíveis
+    - Estruturar hierarquia organizacional
+    - Configurar permissões por função
+    - Relatórios de RH
+    
+    **Parâmetros:**
+    - `funcao_codigo` (int, opcional): Filtrar por função específica
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    funcoes = consultar_funcoes(limite=20)
+    for funcao in funcoes:
+        print(f"{funcao['codigo']}: {funcao['nome']} - {funcao['qtd_funcionarios']} funcionários")
+    ```
+    
+    **Tools Relacionadas:** `consultar_funcionario`, `consultar_usuario`
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
@@ -6250,7 +6349,32 @@ def consultar_view(dias: Optional[int] = None, volume_minimo: Optional[int] = No
 
 @mcp.tool()
 def consultar_sub_grupo_rede() -> str:
-    """consultarSubGrupoRede - GET /INTEGRACAO/CONSULTAR_SUB_GRUPO_REDE"""
+        """
+    **Consulta subgrupos de produtos da rede.**
+    
+    Permite gerenciar a subcategorização de produtos, oferecendo um nível adicional
+    de organização do catálogo além dos grupos principais.
+    
+    **Quando usar:**
+    - Listar subcategorias de produtos
+    - Estrutura hierárquica de catálogo
+    - Análises detalhadas por subcategoria
+    - Organização avançada de produtos
+    
+    **Parâmetros:**
+    - `sub_grupo_codigo` (int, opcional): Filtrar por subgrupo específico
+    - `grupo_codigo` (int, opcional): Filtrar por grupo pai
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    subgrupos = consultar_sub_grupo_rede(grupo_codigo=10, limite=20)
+    for sg in subgrupos:
+        print(f"{sg['grupo']} > {sg['subgrupo']}")
+    ```
+    
+    **Tools Relacionadas:** `consultar_grupo`, `consultar_produto`
+    """
     params = {}
 
     result = client.get("/INTEGRACAO/CONSULTAR_SUB_GRUPO_REDE", params=params)
