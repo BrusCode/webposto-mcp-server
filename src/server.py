@@ -28,6 +28,22 @@ try:
 except ImportError:
     from mcp.server.fastmcp import FastMCP
 
+# Importar resources e prompts
+try:
+    from src.resources_prompts import (
+        get_resources_list,
+        read_resource,
+        get_prompts_list,
+        get_prompt
+    )
+except ImportError:
+    from resources_prompts import (
+        get_resources_list,
+        read_resource,
+        get_prompts_list,
+        get_prompt
+    )
+
 # Configuração de logging
 logging.basicConfig(
     level=logging.INFO,
@@ -144,6 +160,90 @@ client = WebPostoClient()
 # =============================================================================
 
 mcp = FastMCP("webposto-mcp")
+
+# =============================================================================
+# RESOURCES - Documentação e Schemas
+# =============================================================================
+
+@mcp.resource("file:///docs/{filename}")
+def get_documentation(filename: str) -> str:
+    """
+    Retorna documentação do sistema webPosto.
+    
+    Resources disponíveis:
+    - GUIA_USO_APIS.md: Guia completo de uso das APIs
+    - mapeamento_dependencias_apis.md: Mapeamento de dependências
+    - prompt_agente_webposto.md: Prompt otimizado para agentes
+    """
+    uri = f"file:///docs/{filename}"
+    return read_resource(uri)
+
+@mcp.resource("schema://tools")
+def get_tools_schema() -> str:
+    """
+    Retorna o schema JSON com todas as tools disponíveis.
+    """
+    return read_resource("schema://tools")
+
+# =============================================================================
+# PROMPTS - Templates Pré-configurados
+# =============================================================================
+
+@mcp.prompt()
+def analise_vendas(periodo: str = "últimos 30 dias", unidade_negocio: str = "todas") -> str:
+    """
+    Prompt para análise completa de vendas e faturamento.
+    
+    Args:
+        periodo: Período para análise (ex: 'últimos 30 dias', 'mês atual')
+        unidade_negocio: Código da unidade de negócio (opcional)
+    """
+    return get_prompt("analise_vendas", {
+        "periodo": periodo,
+        "unidade_negocio": unidade_negocio
+    })
+
+@mcp.prompt()
+def consulta_estoque(tipo_produto: str = "todos", unidade_negocio: str = "todas") -> str:
+    """
+    Prompt para consulta detalhada de estoque e produtos.
+    
+    Args:
+        tipo_produto: Tipo de produto (combustível, conveniência, todos)
+        unidade_negocio: Código da unidade de negócio (opcional)
+    """
+    return get_prompt("consulta_estoque", {
+        "tipo_produto": tipo_produto,
+        "unidade_negocio": unidade_negocio
+    })
+
+@mcp.prompt()
+def relatorio_financeiro(periodo: str = "mês atual", tipo: str = "ambos") -> str:
+    """
+    Prompt para relatório financeiro completo.
+    
+    Args:
+        periodo: Período para análise (ex: 'mês atual', 'próximos 7 dias')
+        tipo: Tipo de relatório (pagar, receber, ambos)
+    """
+    return get_prompt("relatorio_financeiro", {
+        "periodo": periodo,
+        "tipo": tipo
+    })
+
+@mcp.prompt()
+def analise_abastecimento(periodo: str = "últimos 7 dias", bomba_codigo: str = "todas") -> str:
+    """
+    Prompt para análise detalhada de abastecimentos.
+    
+    Args:
+        periodo: Período para análise
+        bomba_codigo: Código da bomba (opcional, para análise específica)
+    """
+    return get_prompt("analise_abastecimento", {
+        "periodo": periodo,
+        "bomba_codigo": bomba_codigo
+    })
 
 # =============================================================================
 # UTILITÁRIOS
