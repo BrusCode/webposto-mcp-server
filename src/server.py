@@ -3225,7 +3225,27 @@ def consultar_vale_funcionario(data_inicial: str, data_final: str, empresa_codig
 
 @mcp.tool()
 def consultar_usuario_empresa(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarUsuarioEmpresa - GET /INTEGRACAO/USUARIO_EMPRESA"""
+    """
+    **Consulta vínculos de usuários com empresas.**
+    
+    Retorna relacionamento entre usuários e unidades de negócio (multi-tenant),
+    definindo quais empresas cada usuário pode acessar.
+    
+    **Quando usar:**
+    - Configurar acessos multi-tenant
+    - Gestão de permissões por unidade
+    - Auditoria de acessos
+    
+    **Parâmetros:**
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    vinculos = consultar_usuario_empresa(limite=100)
+    ```
+    
+    **Tools Relacionadas:** `consultar_usuario`, `consultar_empresa`
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
@@ -3239,7 +3259,27 @@ def consultar_usuario_empresa(ultimo_codigo: Optional[int] = None, limite: Optio
 
 @mcp.tool()
 def consultar_usuario(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarUsuario - GET /INTEGRACAO/USUARIO"""
+    """
+    **Consulta usuários do sistema.**
+    
+    Retorna lista de usuários cadastrados com permissões e acessos ao sistema,
+    essencial para gestão de segurança e controle de acesso.
+    
+    **Quando usar:**
+    - Gestão de usuários e permissões
+    - Auditoria de acessos
+    - Controle de segurança
+    
+    **Parâmetros:**
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    usuarios = consultar_usuario(limite=100)
+    ```
+    
+    **Tools Relacionadas:** `consultar_usuario_empresa`, `consultar_funcionario`
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
@@ -4893,7 +4933,28 @@ def consultar_grupo_meta(ultimo_codigo: Optional[int] = None, limite: Optional[i
 
 @mcp.tool()
 def consultar_grupo(grupo_codigo_externo: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarGrupo - GET /INTEGRACAO/GRUPO"""
+    """
+    **Consulta grupos de produtos.**
+    
+    Retorna categorização de produtos em grupos (Combustíveis, Lubrificantes,
+    Conveniência, etc.) para organização e relatórios.
+    
+    **Quando usar:**
+    - Organizar catálogo de produtos
+    - Relatórios por categoria
+    - Análise de mix de produtos
+    
+    **Parâmetros:**
+    - `grupo_codigo_externo` (str, opcional): Código externo do grupo
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    grupos = consultar_grupo(limite=50)
+    ```
+    
+    **Tools Relacionadas:** `consultar_sub_grupo_rede`, `consultar_produto`
+    """
     params = {}
     if grupo_codigo_externo is not None:
         params["grupoCodigoExterno"] = grupo_codigo_externo
@@ -4909,7 +4970,27 @@ def consultar_grupo(grupo_codigo_externo: Optional[str] = None, ultimo_codigo: O
 
 @mcp.tool()
 def consultar_funcoes(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarFuncoes - GET /INTEGRACAO/FUNCOES"""
+    """
+    **Consulta funções/cargos de funcionários.**
+    
+    Retorna lista de funções (Frentista, Gerente, Caixa, etc.) para
+    classificação de funcionários e gestão de RH.
+    
+    **Quando usar:**
+    - Cadastro de funcionários
+    - Relatórios de RH por cargo
+    - Gestão de equipes
+    
+    **Parâmetros:**
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    funcoes = consultar_funcoes(limite=50)
+    ```
+    
+    **Tools Relacionadas:** `consultar_funcionario`, `consultar_funcionario_meta`
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
@@ -6223,7 +6304,24 @@ def consultar_view(dias: Optional[int] = None, volume_minimo: Optional[int] = No
 
 @mcp.tool()
 def consultar_sub_grupo_rede() -> str:
-    """consultarSubGrupoRede - GET /INTEGRACAO/CONSULTAR_SUB_GRUPO_REDE"""
+    """
+    **Consulta subgrupos de produtos da rede.**
+    
+    Retorna subcategorias de produtos compartilhadas entre unidades da rede,
+    permitindo classificação hierárquica detalhada.
+    
+    **Quando usar:**
+    - Organização hierárquica de produtos
+    - Relatórios detalhados por subcategoria
+    - Gestão de catálogo
+    
+    **Exemplo:**
+    ```python
+    subgrupos = consultar_sub_grupo_rede()
+    ```
+    
+    **Tools Relacionadas:** `consultar_grupo`, `consultar_produto`
+    """
     params = {}
 
     result = client.get("/INTEGRACAO/CONSULTAR_SUB_GRUPO_REDE", params=params)
