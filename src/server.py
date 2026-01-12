@@ -2308,7 +2308,48 @@ def autoriza_pagamento_abastecimento(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def autorizar_nfe(nota_codigo: str) -> str:
-    """autorizarNfe - POST /INTEGRACAO/AUTORIZAR_NFE_SAIDA/{notaCodigo}"""
+    """
+    **Autoriza a emissão de uma Nota Fiscal Eletrônica (NFe) de saída.**
+    
+    Esta tool envia uma NFe para autorização junto à SEFAZ. Após a autorização,
+    a nota fiscal é validada e pode ser transmitida ao destinatário.
+    
+    **Quando usar:**
+    - Para autorizar NFe de vendas
+    - Para emissão de notas fiscais eletrônicas
+    - Para compliance com legislação fiscal
+    - Para integrações com SEFAZ
+    
+    **Fluxo de Autorização:**
+    1. Nota criada no sistema
+    2. Validação de dados
+    3. Envio para SEFAZ
+    4. Aguardar retorno
+    5. Processar autorização ou rejeição
+    
+    **Parâmetros:**
+    - `nota_codigo` (str, obrigatório): Código da nota a ser autorizada.
+    
+    **Exemplo de Uso (Python):**
+    ```python
+    # Autorizar uma NFe
+    resultado = autorizar_nfe(nota_codigo="12345")
+    
+    if resultado["autorizada"]:
+        print(f"NFe autorizada! Chave: {resultado['chave']}")
+    else:
+        print(f"Erro: {resultado['mensagem']}")
+    ```
+    
+    **Tools Relacionadas:**
+    - `consultar_nota_manifestacao` - Consultar manifestações
+    - `consultar_icms` - Configurações tributárias
+    
+    **Observações:**
+    - Operação pode demorar alguns segundos (aguardar resposta da SEFAZ)
+    - Valide todos os dados antes de autorizar
+    - Em caso de rejeição, corrija os erros e tente novamente
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/AUTORIZAR_NFE_SAIDA/{notaCodigo}", data=dados, params=params)
@@ -4071,7 +4112,59 @@ def consultar_placares(data_inicial: str, data_final: str) -> str:
 
 @mcp.tool()
 def consultar_pisconfins(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarPisconfins - GET /INTEGRACAO/PIS_COFINS"""
+    """
+    **Consulta configurações de PIS e COFINS para compliance tributário federal.**
+    
+    Esta tool fornece acesso às configurações de PIS (Programa de Integração Social) e
+    COFINS (Contribuição para Financiamento da Seguridade Social) cadastradas no sistema.
+    Essencial para cálculo correto de tributos federais e compliance fiscal.
+    
+    **Quando usar:**
+    - Para consultar alíquotas de PIS e COFINS
+    - Para validação de cálculos tributários federais
+    - Para auditorias fiscais
+    - Para apuração de impostos
+    - Para compliance com legislação federal
+    - Para integrações contábeis
+    
+    **Conceito de PIS/COFINS:**
+    PIS e COFINS são contribuições federais calculadas sobre o faturamento.
+    Podem ser apuradas em regime cumulativo ou não-cumulativo, com alíquotas diferentes.
+    
+    **Parâmetros:**
+    - `ultimo_codigo` (int, opcional): Para paginação.
+    - `limite` (int, opcional): Número máximo de registros (default: 100).
+    
+    **Retorno:**
+    Configurações de PIS/COFINS contendo:
+    - Alíquotas de PIS
+    - Alíquotas de COFINS
+    - CST (Código de Situação Tributária)
+    - Regime de apuração (cumulativo/não-cumulativo)
+    - Base de cálculo
+    - Isenções e benefícios fiscais
+    
+    **Exemplo de Uso (Python):**
+    ```python
+    # Listar configurações de PIS/COFINS
+    pis_cofins = consultar_pisconfins(limite=200)
+    
+    # Calcular PIS/COFINS sobre uma venda
+    valor_venda = 1000.00
+    config = pis_cofins[0]  # Primeira configuração
+    
+    pis = valor_venda * (config["aliquotaPIS"] / 100)
+    cofins = valor_venda * (config["aliquotaCOFINS"] / 100)
+    
+    print(f"PIS: R$ {pis:.2f}")
+    print(f"COFINS: R$ {cofins:.2f}")
+    print(f"Total: R$ {pis + cofins:.2f}")
+    ```
+    
+    **Tools Relacionadas:**
+    - `consultar_icms` - Configurações de ICMS
+    - `consultar_dre` - Análise financeira com impostos
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
@@ -4337,7 +4430,52 @@ def consultar_nota_saida_item(data_inicial: Optional[str] = None, data_final: Op
 
 @mcp.tool()
 def consultar_nota_manifestacao(data_inicial: Optional[str] = None, data_final: Optional[str] = None, compra_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, manifestacao_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarNotaManifestacao - GET /INTEGRACAO/NOTA_MANIFESTACAO"""
+    """
+    **Consulta manifestações de notas fiscais eletrônicas (NFe).**
+    
+    Esta tool permite consultar manifestações realizadas sobre notas fiscais eletrônicas
+    recebidas. A manifestação é obrigatória para confirmar ou recusar o recebimento de
+    mercadorias e é essencial para compliance fiscal.
+    
+    **Quando usar:**
+    - Para consultar status de manifestações de NFe
+    - Para auditorias de notas fiscais recebidas
+    - Para compliance com SEFAZ
+    - Para validação de recebimento de mercadorias
+    - Para integrações contábeis
+    
+    **Tipos de Manifestação:**
+    - Confirmação da Operação
+    - Ciência da Emissão
+    - Desconhecimento da Operação
+    - Operação Não Realizada
+    
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, opcional): Período de consulta.
+      Formato: "YYYY-MM-DD"
+    - `empresa_codigo` (int, opcional): Filtrar por empresa.
+    - `compra_codigo` (int, opcional): Filtrar por compra específica.
+    - `manifestacao_codigo` (int, opcional): Filtrar por manifestação específica.
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação.
+    
+    **Exemplo de Uso (Python):**
+    ```python
+    # Consultar manifestações do mês
+    manifestacoes = consultar_nota_manifestacao(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+    
+    # Verificar manifestações pendentes
+    pendentes = [m for m in manifestacoes if m["status"] == "PENDENTE"]
+    print(f"Manifestações pendentes: {len(pendentes)}")
+    ```
+    
+    **Tools Relacionadas:**
+    - `autorizar_nfe` - Autorizar emissão de NFe
+    - `consultar_icms` - Configurações tributárias
+    """
     params = {}
     if data_inicial is not None:
         params["dataInicial"] = data_inicial
@@ -4624,7 +4762,48 @@ def consultar_relatorio_mapa(data_inicial: str, data_final: str, empresa_codigo:
 
 @mcp.tool()
 def consultar_icms(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarIcms - GET /INTEGRACAO/ICMS"""
+    """
+    **Consulta configurações e alíquotas de ICMS para compliance tributário.**
+    
+    Esta tool fornece acesso às configurações de ICMS (Imposto sobre Circulação de
+    Mercadorias e Serviços) cadastradas no sistema, incluindo alíquotas, CSTs, CFOPs
+    e regras de tributação. Essencial para compliance fiscal e cálculo correto de impostos.
+    
+    **Quando usar:**
+    - Para consultar alíquotas de ICMS por estado e produto
+    - Para validação de cálculos tributários
+    - Para auditorias fiscais
+    - Para configuração de novos produtos
+    - Para compliance com legislação tributária
+    - Para integrações com sistemas contábeis
+    
+    **Parâmetros:**
+    - `ultimo_codigo` (int, opcional): Para paginação.
+    - `limite` (int, opcional): Número máximo de registros (default: 100).
+    
+    **Retorno:**
+    Configurações de ICMS contendo:
+    - Alíquotas por estado (UF)
+    - CST (Código de Situação Tributária)
+    - CFOP (Código Fiscal de Operações)
+    - Base de cálculo
+    - Reduções de base
+    - Isenções e benefícios fiscais
+    
+    **Exemplo de Uso (Python):**
+    ```python
+    # Listar todas as configurações de ICMS
+    icms_config = consultar_icms(limite=500)
+    
+    # Filtrar alíquota para um estado específico
+    icms_sp = [i for i in icms_config if i["uf"] == "SP"]
+    print(f"Alíquota ICMS SP: {icms_sp[0]['aliquota']}%")
+    ```
+    
+    **Tools Relacionadas:**
+    - `consultar_pisconfins` - Configurações de PIS/COFINS
+    - `consultar_nota_manifestacao` - Manifestação de notas fiscais
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
