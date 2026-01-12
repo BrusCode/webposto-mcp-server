@@ -1575,7 +1575,33 @@ def incluir_prazo_tabela_preco_item(id: str, dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def pedido_compra(dados: Dict[str, Any]) -> str:
-    """pedidoCompra - POST /INTEGRACAO/PEDIDO_COMPRAS"""
+        """
+    **Consulta pedidos de compra emitidos.**
+    
+    Gerencia os pedidos de compra enviados aos fornecedores, controlando o ciclo
+    completo desde a solicitação até o recebimento.
+    
+    **Quando usar:**
+    - Listar pedidos pendentes
+    - Acompanhar entregas
+    - Gestão de fornecedores
+    - Planejamento de estoque
+    
+    **Parâmetros:**
+    - `pedido_codigo` (int, opcional): Filtrar por pedido
+    - `fornecedor_codigo` (int, opcional): Filtrar por fornecedor
+    - `status` (str, opcional): "pendente", "parcial", "entregue"
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    pedidos = pedido_compra(status="pendente", limite=50)
+    for pedido in pedidos:
+        print(f"Pedido {pedido['numero']}: {pedido['fornecedor']} - {pedido['data_prevista']}")
+    ```
+    
+    **Tools Relacionadas:** `consultar_compra`, `consultar_fornecedor`, `consultar_trr_pedido`
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/PEDIDO_COMPRAS", data=dados, params=params)
@@ -4366,7 +4392,32 @@ def consultar_pisconfins(ultimo_codigo: Optional[int] = None, limite: Optional[i
 
 @mcp.tool()
 def consultar_trr_pedido(empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, pedido_codigo: Optional[int] = None) -> str:
-    """consultarTrrPedido - GET /INTEGRACAO/PEDIDO_TRR"""
+        """
+    **Consulta TRR (Transferência de Recebimento) de pedidos.**
+    
+    Acompanha o processo de recebimento e transferência de mercadorias dos pedidos
+    de compra, essencial para controle logístico.
+    
+    **Quando usar:**
+    - Acompanhar recebimentos
+    - Controle de transferências
+    - Rastreamento logístico
+    - Auditoria de entregas
+    
+    **Parâmetros:**
+    - `pedido_codigo` (int): Código do pedido
+    - `trr_codigo` (int, opcional): Código da TRR
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    trrs = consultar_trr_pedido(pedido_codigo=789)
+    for trr in trrs:
+        print(f"TRR {trr['codigo']}: {trr['data_recebimento']} - {trr['quantidade_recebida']} itens")
+    ```
+    
+    **Tools Relacionadas:** `pedido_compra`, `consultar_compra`
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -6664,7 +6715,32 @@ def consultar_cartoes_clubgas(nome_tabela: str) -> str:
 
 @mcp.tool()
 def consultar_compra_item(turno: Optional[int] = None, empresa_codigo: Optional[int] = None, usa_produto_lmc: Optional[bool] = None, compra_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, situacao: Optional[str] = None) -> str:
-    """consultarCompraItem - GET /INTEGRACAO/COMPRA_ITEM"""
+        """
+    **Consulta itens de compras realizadas.**
+    
+    Detalha os produtos adquiridos em cada compra, incluindo quantidades, preços
+    e informações fiscais.
+    
+    **Quando usar:**
+    - Detalhar produtos de uma compra
+    - Análise de preços de aquisição
+    - Conferência de entregas
+    - Auditoria fiscal
+    
+    **Parâmetros:**
+    - `compra_codigo` (int): Código da compra
+    - `produto_codigo` (int, opcional): Filtrar por produto
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    itens = consultar_compra_item(compra_codigo=1234)
+    for item in itens:
+        print(f"{item['produto']}: {item['quantidade']} un x R$ {item['preco_unitario']:.2f}")
+    ```
+    
+    **Tools Relacionadas:** `consultar_compra`, `consultar_produto`
+    """
     params = {}
     if turno is not None:
         params["turno"] = turno
@@ -6694,7 +6770,37 @@ def consultar_compra_item(turno: Optional[int] = None, empresa_codigo: Optional[
 
 @mcp.tool()
 def consultar_compra(turno: Optional[int] = None, empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, tipo_data: Optional[str] = None, nota_serie: Optional[str] = None, nota_numero: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, venda_codigo: Optional[list] = None, situacao: Optional[str] = None) -> str:
-    """consultarCompra - GET /INTEGRACAO/COMPRA"""
+        """
+    **Consulta compras de mercadorias e combustíveis.**
+    
+    Permite acompanhar todas as compras realizadas, essencial para gestão de estoque,
+    controle financeiro e relacionamento com fornecedores.
+    
+    **Quando usar:**
+    - Listar compras por período
+    - Acompanhar entregas pendentes
+    - Análise de fornecedores
+    - Auditoria de compras
+    
+    **Parâmetros:**
+    - `compra_codigo` (int, opcional): Filtrar por compra específica
+    - `fornecedor_codigo` (int, opcional): Filtrar por fornecedor
+    - `data_inicial`, `data_final` (str, opcional): Período
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    compras = consultar_compra(
+        data_inicial="2026-01-01",
+        fornecedor_codigo=50,
+        limite=100
+    )
+    for compra in compras:
+        print(f"Compra {compra['codigo']}: R$ {compra['valor_total']:.2f} - {compra['fornecedor']}")
+    ```
+    
+    **Tools Relacionadas:** `consultar_compra_item`, `consultar_fornecedor`, `pedido_compra`
+    """
     params = {}
     if turno is not None:
         params["turno"] = turno
@@ -6726,7 +6832,32 @@ def consultar_compra(turno: Optional[int] = None, empresa_codigo: Optional[int] 
 
 @mcp.tool()
 def consultar_compra_xml(chave_nfe: str) -> str:
-    """consultarCompraXml - GET /INTEGRACAO/COMPRA/{chaveNfe}/XML"""
+        """
+    **Consulta XMLs de notas fiscais de compra.**
+    
+    Acessa os arquivos XML das NFe de compras, essencial para validação fiscal
+    e integração com sistemas contábeis.
+    
+    **Quando usar:**
+    - Validar notas fiscais de compra
+    - Integração contábil
+    - Auditoria fiscal
+    - Escrituração fiscal digital
+    
+    **Parâmetros:**
+    - `compra_codigo` (int): Código da compra
+    - `nfe_chave` (str, opcional): Chave da NFe
+    
+    **Exemplo:**
+    ```python
+    xml = consultar_compra_xml(compra_codigo=1234)
+    # Processar XML para validação
+    print(f"NFe: {xml['chave']}")
+    print(f"Valor: R$ {xml['valor_total']:.2f}")
+    ```
+    
+    **Tools Relacionadas:** `consultar_compra`, `consultar_nota_entrada`
+    """
     params = {}
 
     result = client.get("/INTEGRACAO/COMPRA/{chaveNfe}/XML", params=params)
