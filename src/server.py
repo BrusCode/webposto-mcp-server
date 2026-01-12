@@ -183,7 +183,97 @@ def format_response(data: Any, max_records: int = 50) -> str:
 
 @mcp.tool()
 def receber_titulo_convertido(dados: Dict[str, Any]) -> str:
-    """receberTituloConvertido - PUT /INTEGRACAO/RECEBER_TITULO_CONVERTIDO"""
+    """
+    **Recebe título a receber convertido (baixa com conversão).**
+
+    Esta tool permite dar baixa em títulos a receber que foram convertidos para
+    outras formas de pagamento (ex: duplicata convertida em cartão, cheque, etc.).
+    É usado quando o cliente paga uma duplicata com forma de pagamento diferente.
+
+    **Quando usar:**
+    - Para baixar duplicatas pagas com cartão
+    - Para baixar duplicatas pagas com cheque
+    - Para converter títulos em outras formas de pagamento
+    - Para conciliação de recebimentos
+
+    **Conceito de Conversão:**
+    No webPosto, quando um cliente paga uma duplicata/título a receber usando
+    cartão ou cheque (ao invés de dinheiro/transferência), o sistema registra
+    como "recebimento convertido", mantendo o histórico da forma original e final.
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o Título:** Use `consultar_titulo_receber` para obter o código.
+    2. **Prepare os Dados:** Monte objeto com informações do recebimento.
+    3. **Registre o Recebimento:** Chame `receber_titulo_convertido`.
+
+    **Parâmetros (via objeto `dados`):**
+    - `tituloReceberCodigo` (int, obrigatório): Código do título a receber.
+      Obter via: `consultar_titulo_receber`
+    - `valorRecebido` (float, obrigatório): Valor recebido.
+      Pode ser parcial (menor que saldo) ou total.
+    - `dataRecebimento` (str, obrigatório): Data do recebimento (YYYY-MM-DD).
+      Exemplo: "2025-01-10"
+    - `formaPagamento` (str, obrigatório): Forma de pagamento da conversão.
+      Valores: "CARTAO", "CHEQUE", "PIX", "TRANSFERENCIA"
+    - `contaCodigo` (int, opcional): Código da conta bancária.
+      Obter via: `consultar_conta`
+    - `observacao` (str, opcional): Observações sobre o recebimento.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Receber duplicata paga com cartão
+    receber_titulo_convertido(
+        dados={
+            "tituloReceberCodigo": 12345,
+            "valorRecebido": 500.00,
+            "dataRecebimento": "2025-01-10",
+            "formaPagamento": "CARTAO",
+            "observacao": "Pago com cartão Visa"
+        }
+    )
+
+    # Cenário 2: Receber duplicata paga com cheque
+    receber_titulo_convertido(
+        dados={
+            "tituloReceberCodigo": 12346,
+            "valorRecebido": 1000.00,
+            "dataRecebimento": "2025-01-10",
+            "formaPagamento": "CHEQUE",
+            "contaCodigo": 1,
+            "observacao": "Cheque pré-datado para 2025-01-20"
+        }
+    )
+
+    # Cenário 3: Recebimento parcial com PIX
+    receber_titulo_convertido(
+        dados={
+            "tituloReceberCodigo": 12347,
+            "valorRecebido": 250.00,  # Parcial de R$ 500
+            "dataRecebimento": "2025-01-10",
+            "formaPagamento": "PIX",
+            "contaCodigo": 1,
+            "observacao": "Pagamento parcial - saldo restante R$ 250"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_titulo_receber` (para obter tituloReceberCodigo)
+    - Opcional: `consultar_conta` (para obter contaCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_titulo_receber` - Consultar títulos a receber
+    - `receber_titulo_cartao` - Receber especificamente com cartão
+    - `consultar_duplicata` - Consultar duplicatas
+
+    **Diferença entre receber_titulo_convertido e receber_titulo_cartao:**
+    - `receber_titulo_convertido`: Genérico, aceita várias formas (cartão, cheque, PIX)
+    - `receber_titulo_cartao`: Específico para cartões, com mais detalhes da transação
+
+    **Nota:**
+    Para recebimentos em dinheiro/transferência direta, use a tool padrão de
+    baixa de títulos (sem conversão).
+    """
     endpoint = f"/INTEGRACAO/RECEBER_TITULO_CONVERTIDO"
     params = {}
 
@@ -1794,7 +1884,118 @@ def incluir_cliente_prazo(codigo_cliente: str, dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def consultar_cartao(data_inicial: str, data_final: str, turno: Optional[int] = None, empresa_codigo: Optional[int] = None, apenas_pendente: Optional[bool] = None, data_filtro: Optional[str] = None, data_hora_atualizacao: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, venda_codigo: Optional[list] = None) -> str:
-    """consultarCartao - GET /INTEGRACAO/CARTAO"""
+    """
+    **Consulta transações de cartões (crédito/débito).**
+
+    Esta tool retorna transações de cartões de crédito e débito realizadas no posto,
+    incluindo vendas, recebimentos, taxas de administradoras e status de liquidação.
+    É essencial para conciliação financeira e gestão de recebíveis.
+
+    **Quando usar:**
+    - Para listar transações de cartões
+    - Para conciliação com administradoras
+    - Para acompanhamento de recebíveis
+    - Para relatórios financeiros
+    - Para auditoria de vendas
+
+    **Tipos de Cartões:**
+    - **Crédito**: Visa, Mastercard, Elo, Amex, etc.
+    - **Débito**: Cartões de débito das mesmas bandeiras
+    - **Vale**: Vale combustível, vale alimentação
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresa` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_cartao` com período e filtros.
+
+    **Parâmetros Principais:**
+    - `data_inicial` (str, obrigatório): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, obrigatório): Data de fim no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (int, opcional): Código da empresa/filial.
+      Obter via: `consultar_empresa`
+      Exemplo: 7
+    - `apenas_pendente` (bool, opcional): Se True, retorna apenas cartões não liquidados.
+      Muito útil para gestão de recebíveis.
+      Exemplo: True
+    - `data_filtro` (str, opcional): Tipo de data para filtro.
+      Valores: "VENDA", "RECEBIMENTO", "LIQUIDACAO"
+      Default: "VENDA"
+    - `turno` (int, opcional): Filtrar por turno específico.
+      Obter via: `consultar_turno`
+    - `venda_codigo` (List[int], opcional): Filtrar por vendas específicas.
+      Obter via: `consultar_venda`
+    - `data_hora_atualizacao` (str, opcional): Retorna cartões atualizados após data/hora.
+      Formato: "YYYY-MM-DD HH:MM:SS"
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+
+    **Retorno:**
+    Lista de transações de cartões contendo:
+    - Código da transação
+    - Número da venda
+    - Bandeira (Visa, Master, etc.)
+    - Tipo (crédito/débito)
+    - Valor da transação
+    - Taxa da administradora
+    - Valor líquido
+    - Data da venda
+    - Data prevista de recebimento
+    - Data de liquidação (se liquidado)
+    - Status (pendente/liquidado)
+    - Administradora
+    - NSU/Autorização
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar cartões pendentes de liquidação
+    pendentes = consultar_cartao(
+        data_inicial="2025-01-01",
+        data_final="2025-01-10",
+        empresa_codigo=7,
+        apenas_pendente=True,
+        data_filtro="VENDA"
+    )
+
+    # Cenário 2: Conciliação com administradora
+    cartoes_mes = consultar_cartao(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7,
+        limite=500
+    )
+    
+    total_vendas = sum(c["valorTransacao"] for c in cartoes_mes)
+    total_taxas = sum(c["taxaAdministradora"] for c in cartoes_mes)
+    total_liquido = sum(c["valorLiquido"] for c in cartoes_mes)
+
+    # Cenário 3: Relatório de recebíveis (previsão)
+    import datetime
+    hoje = datetime.date.today()
+    proximos_30_dias = hoje + datetime.timedelta(days=30)
+    
+    a_receber = consultar_cartao(
+        data_inicial=hoje.strftime("%Y-%m-%d"),
+        data_final=proximos_30_dias.strftime("%Y-%m-%d"),
+        empresa_codigo=7,
+        apenas_pendente=True,
+        data_filtro="RECEBIMENTO"
+    )
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresa` (para obter empresa_codigo)
+    - Opcional: `consultar_venda` (para obter venda_codigo)
+
+    **Tools Relacionadas:**
+    - `incluir_cartao` - Registrar transação de cartão
+    - `receber_titulo_cartao` - Liquidar recebimento de cartão
+    - `consultar_administradora` - Consultar administradoras de cartões
+
+    **Dica:**
+    Use `apenas_pendente=True` com `data_filtro="RECEBIMENTO"` para gestão
+    de fluxo de caixa e acompanhamento de recebíveis de cartões.
+    """
     params = {}
     if turno is not None:
         params["turno"] = turno
@@ -1879,7 +2080,123 @@ def alterar_preco_combustivel() -> str:
 
 @mcp.tool()
 def pagar_titulo_pagar(dados: Dict[str, Any]) -> str:
-    """pagarTituloPagar - PATCH /INTEGRACAO/TITULO_PAGAR/PAGAR"""
+    """
+    **Registra pagamento de título a pagar (baixa de contas a pagar).**
+
+    Esta tool permite dar baixa em títulos a pagar (boletos, notas fiscais, despesas),
+    registrando o pagamento efetivo com data, valor, conta bancária e forma de pagamento.
+    É essencial para gestão de contas a pagar e fluxo de caixa.
+
+    **Quando usar:**
+    - Para registrar pagamento de boletos
+    - Para baixar notas fiscais de fornecedores
+    - Para registrar pagamento de despesas
+    - Para conciliação bancária
+    - Para controle de fluxo de caixa
+
+    **Tipos de Pagamento:**
+    - **Total**: Paga o valor total do título
+    - **Parcial**: Paga parte do valor (gera saldo remanescente)
+    - **Com Desconto**: Paga com desconto negociado
+    - **Com Juros/Multa**: Paga com acréscimos por atraso
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o Título:** Use `consultar_titulo_pagar` para obter o código.
+    2. **Prepare os Dados:** Monte objeto com informações do pagamento.
+    3. **Registre o Pagamento:** Chame `pagar_titulo_pagar`.
+
+    **Parâmetros (via objeto `dados`):**
+    - `tituloPagarCodigo` (int, obrigatório): Código do título a pagar.
+      Obter via: `consultar_titulo_pagar`
+    - `valorPago` (float, obrigatório): Valor efetivamente pago.
+      Pode incluir juros/multa ou desconto.
+    - `dataPagamento` (str, obrigatório): Data do pagamento (YYYY-MM-DD).
+      Exemplo: "2025-01-10"
+    - `contaCodigo` (int, obrigatório): Código da conta bancária usada.
+      Obter via: `consultar_conta`
+    - `formaPagamento` (str, opcional): Forma de pagamento.
+      Valores: "BOLETO", "TRANSFERENCIA", "PIX", "DINHEIRO", "CHEQUE"
+    - `valorDesconto` (float, opcional): Valor de desconto obtido.
+      Exemplo: 50.00
+    - `valorJuros` (float, opcional): Valor de juros pagos.
+      Exemplo: 25.00
+    - `valorMulta` (float, opcional): Valor de multa paga.
+      Exemplo: 10.00
+    - `observacao` (str, opcional): Observações sobre o pagamento.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Pagar boleto no valor exato
+    pagar_titulo_pagar(
+        dados={
+            "tituloPagarCodigo": 12345,
+            "valorPago": 5000.00,
+            "dataPagamento": "2025-01-10",
+            "contaCodigo": 1,
+            "formaPagamento": "BOLETO",
+            "observacao": "Pagamento via internet banking"
+        }
+    )
+
+    # Cenário 2: Pagar com desconto
+    pagar_titulo_pagar(
+        dados={
+            "tituloPagarCodigo": 12346,
+            "valorPago": 950.00,
+            "dataPagamento": "2025-01-10",
+            "contaCodigo": 1,
+            "formaPagamento": "PIX",
+            "valorDesconto": 50.00,  # Desconto de 5%
+            "observacao": "Pagamento antecipado com desconto"
+        }
+    )
+
+    # Cenário 3: Pagar em atraso com juros e multa
+    pagar_titulo_pagar(
+        dados={
+            "tituloPagarCodigo": 12347,
+            "valorPago": 1035.00,
+            "dataPagamento": "2025-01-10",
+            "contaCodigo": 1,
+            "formaPagamento": "TRANSFERENCIA",
+            "valorJuros": 25.00,   # Juros de mora
+            "valorMulta": 10.00,   # Multa de 1%
+            "observacao": "Pagamento em atraso - vencimento 2024-12-31"
+        }
+    )
+
+    # Cenário 4: Pagamento parcial
+    pagar_titulo_pagar(
+        dados={
+            "tituloPagarCodigo": 12348,
+            "valorPago": 2500.00,  # Parcial de R$ 5000
+            "dataPagamento": "2025-01-10",
+            "contaCodigo": 1,
+            "formaPagamento": "PIX",
+            "observacao": "Pagamento parcial - saldo R$ 2500 para próximo mês"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_titulo_pagar` (para obter tituloPagarCodigo)
+    - Requer: `consultar_conta` (para obter contaCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_titulo_pagar` - Consultar títulos a pagar
+    - `incluir_titulo_pagar` - Criar novo título a pagar
+    - `consultar_conta` - Consultar contas bancárias
+
+    **Validações:**
+    - Título deve estar pendente (não pago)
+    - Valor pago deve ser maior que zero
+    - Conta bancária deve existir e estar ativa
+    - Data de pagamento não pode ser futura
+
+    **Dica:**
+    Para pagamentos em lote, consulte primeiro os títulos pendentes com
+    `consultar_titulo_pagar(apenas_pendente=True)` e depois processe cada um.
+    """
     endpoint = f"/INTEGRACAO/TITULO_PAGAR/PAGAR"
     params = {}
 
@@ -4014,7 +4331,118 @@ def consultar_empresa(empresa_codigo_externo: Optional[str] = None, ultimo_codig
 
 @mcp.tool()
 def consultar_duplicata(data_inicial: Optional[str] = None, data_final: Optional[str] = None, data_hora_atualizacao: Optional[str] = None, apenas_pendente: Optional[bool] = None, data_filtro: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, empresa_codigo: Optional[int] = None, nota_entrada_codigo: Optional[int] = None, titulo_pagar_codigo: Optional[int] = None, fornecedor_codigo: Optional[int] = None, linha_digitavel: Optional[str] = None, autorizado: Optional[bool] = None, tipo_lancamento: Optional[str] = None) -> str:
-    """consultarDuplicata - GET /INTEGRACAO/DUPLICATA"""
+    """
+    **Consulta duplicatas (títulos a pagar de fornecedores).**
+
+    Esta tool retorna duplicatas geradas a partir de notas fiscais de entrada,
+    representando títulos a pagar para fornecedores. É similar a `consultar_titulo_pagar`
+    mas focada especificamente em duplicatas de compras.
+
+    **Quando usar:**
+    - Para listar duplicatas de fornecedores
+    - Para acompanhamento de compras a prazo
+    - Para conciliação de notas fiscais
+    - Para gestão de contas a pagar de compras
+
+    **Diferença entre consultar_duplicata e consultar_titulo_pagar:**
+    - `consultar_duplicata`: Específico para duplicatas de notas fiscais de entrada
+    - `consultar_titulo_pagar`: Genérico, inclui todos os tipos de títulos a pagar
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresa` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_duplicata` com período e filtros.
+
+    **Parâmetros Principais:**
+    - `data_inicial` (str, opcional): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, opcional): Data de fim no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (int, opcional): Código da empresa/filial.
+      Obter via: `consultar_empresa`
+      Exemplo: 7
+    - `fornecedor_codigo` (int, opcional): Filtrar por fornecedor específico.
+      Obter via: `consultar_fornecedor`
+    - `nota_entrada_codigo` (int, opcional): Filtrar por nota fiscal de entrada.
+      Obter via: `consultar_nota_entrada`
+    - `apenas_pendente` (bool, opcional): Se True, retorna apenas duplicatas não pagas.
+      Muito útil para gestão de contas a pagar.
+      Exemplo: True
+    - `data_filtro` (str, opcional): Tipo de data para filtro.
+      Valores: "VENCIMENTO", "EMISSAO", "PAGAMENTO"
+      Default: "VENCIMENTO"
+    - `linha_digitavel` (str, opcional): Buscar por linha digitável de boleto.
+    - `autorizado` (bool, opcional): Filtrar duplicatas autorizadas para pagamento.
+    - `tipo_lancamento` (str, opcional): Tipo de lançamento.
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+
+    **Retorno:**
+    Lista de duplicatas contendo:
+    - Código da duplicata
+    - Número do documento
+    - Nota fiscal de entrada
+    - Fornecedor
+    - Valor original
+    - Valor pago
+    - Saldo pendente
+    - Data de emissão
+    - Data de vencimento
+    - Data de pagamento (se pago)
+    - Situação (pendente/pago/cancelado)
+    - Linha digitável (se boleto)
+    - Empresa/filial
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar duplicatas pendentes a vencer
+    pendentes = consultar_duplicata(
+        data_inicial="2025-01-10",
+        data_final="2025-01-31",
+        empresa_codigo=7,
+        apenas_pendente=True,
+        data_filtro="VENCIMENTO"
+    )
+
+    # Cenário 2: Listar duplicatas de fornecedor específico
+    duplicatas_fornecedor = consultar_duplicata(
+        fornecedor_codigo=456,
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+
+    # Cenário 3: Buscar duplicata por linha digitável
+    duplicata = consultar_duplicata(
+        linha_digitavel="34191.79001 01043.510047 91020.150008 1 96610000005000"
+    )
+
+    # Cenário 4: Relatório de duplicatas do mês
+    duplicatas_mes = consultar_duplicata(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7,
+        limite=500
+    )
+    
+    total_duplicatas = sum(d["valorOriginal"] for d in duplicatas_mes)
+    total_pendente = sum(d["saldoPendente"] for d in duplicatas_mes if d["saldoPendente"] > 0)
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresa` (para obter empresa_codigo)
+    - Opcional: `consultar_fornecedor` (para obter fornecedor_codigo)
+    - Opcional: `consultar_nota_entrada` (para obter nota_entrada_codigo)
+
+    **Tools Relacionadas:**
+    - `consultar_titulo_pagar` - Consultar todos os títulos a pagar
+    - `pagar_titulo_pagar` - Pagar duplicata
+    - `consultar_nota_entrada` - Consultar notas fiscais de entrada
+    - `consultar_fornecedor` - Consultar fornecedores
+
+    **Dica:**
+    Use `apenas_pendente=True` com `data_filtro="VENCIMENTO"` para planejamento
+    de fluxo de caixa e gestão de pagamentos a fornecedores.
+    """
     params = {}
     if data_inicial is not None:
         params["dataInicial"] = data_inicial
@@ -4463,7 +4891,118 @@ def consultar_cheque_pagar(data_inicial: str, data_final: str, tipo_data: str, e
 
 @mcp.tool()
 def consultar_cheque(data_inicial: str, data_final: str, turno: Optional[int] = None, empresa_codigo: Optional[int] = None, apenas_pendente: Optional[bool] = None, data_filtro: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, data_hora_atualizacao: Optional[str] = None, venda_codigo: Optional[list] = None) -> str:
-    """consultarCheque - GET /INTEGRACAO/CHEQUE"""
+    """
+    **Consulta cheques recebidos (pré-datados e à vista).**
+
+    Esta tool retorna cheques recebidos como forma de pagamento no posto,
+    incluindo cheques à vista e pré-datados, com status de compensação,
+    devolução e liquidação. É essencial para gestão de recebíveis.
+
+    **Quando usar:**
+    - Para listar cheques recebidos
+    - Para acompanhamento de cheques pré-datados
+    - Para controle de compensação
+    - Para gestão de devoluções
+    - Para relatórios financeiros
+
+    **Status de Cheques:**
+    - **Pendente**: Aguardando compensação
+    - **Compensado**: Liquidado com sucesso
+    - **Devolvido**: Devolvido pelo banco
+    - **Cancelado**: Cancelado manualmente
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresa` para filtrar.
+    2. **Execute a Consulta:** Chame `consultar_cheque` com período e filtros.
+
+    **Parâmetros Principais:**
+    - `data_inicial` (str, obrigatório): Data de início no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `data_final` (str, obrigatório): Data de fim no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `empresa_codigo` (int, opcional): Código da empresa/filial.
+      Obter via: `consultar_empresa`
+      Exemplo: 7
+    - `apenas_pendente` (bool, opcional): Se True, retorna apenas cheques não compensados.
+      Muito útil para gestão de recebíveis.
+      Exemplo: True
+    - `data_filtro` (str, opcional): Tipo de data para filtro.
+      Valores: "RECEBIMENTO", "VENCIMENTO", "COMPENSACAO"
+      Default: "RECEBIMENTO"
+    - `turno` (int, opcional): Filtrar por turno específico.
+      Obter via: `consultar_turno`
+    - `venda_codigo` (List[int], opcional): Filtrar por vendas específicas.
+      Obter via: `consultar_venda`
+    - `data_hora_atualizacao` (str, opcional): Retorna cheques atualizados após data/hora.
+      Formato: "YYYY-MM-DD HH:MM:SS"
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+
+    **Retorno:**
+    Lista de cheques contendo:
+    - Código do cheque
+    - Número da venda
+    - Número do cheque
+    - Banco
+    - Agência
+    - Conta
+    - Cliente/Emitente
+    - Valor
+    - Data de recebimento
+    - Data de vencimento (pré-datado)
+    - Data de compensação (se compensado)
+    - Status (pendente/compensado/devolvido)
+    - Observações
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar cheques pré-datados a vencer
+    import datetime
+    hoje = datetime.date.today()
+    proximos_7_dias = hoje + datetime.timedelta(days=7)
+    
+    a_vencer = consultar_cheque(
+        data_inicial=hoje.strftime("%Y-%m-%d"),
+        data_final=proximos_7_dias.strftime("%Y-%m-%d"),
+        empresa_codigo=7,
+        apenas_pendente=True,
+        data_filtro="VENCIMENTO"
+    )
+
+    # Cenário 2: Listar cheques pendentes de compensação
+    pendentes = consultar_cheque(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7,
+        apenas_pendente=True,
+        data_filtro="RECEBIMENTO"
+    )
+
+    # Cenário 3: Relatório de cheques do mês
+    cheques_mes = consultar_cheque(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7,
+        limite=500
+    )
+    
+    total_cheques = sum(c["valor"] for c in cheques_mes)
+    total_pendentes = sum(c["valor"] for c in cheques_mes if c["status"] == "PENDENTE")
+    total_compensados = sum(c["valor"] for c in cheques_mes if c["status"] == "COMPENSADO")
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresa` (para obter empresa_codigo)
+    - Opcional: `consultar_venda` (para obter venda_codigo)
+
+    **Tools Relacionadas:**
+    - `consultar_cheque_pagar` - Cheques a pagar (emitidos)
+    - `consultar_venda` - Vendas que geraram cheques
+
+    **Dica:**
+    Use `apenas_pendente=True` com `data_filtro="VENCIMENTO"` para gestão
+    de cheques pré-datados e planejamento de depósitos.
+    """
     params = {}
     if turno is not None:
         params["turno"] = turno
@@ -5068,7 +5607,92 @@ def consultar_abastecimento(data_inicial: str, data_final: str, tipo_data: Optio
 
 @mcp.tool()
 def excluir_titulo(id: str) -> str:
-    """excluirTitulo - DELETE /INTEGRACAO/TITULO_PAGAR/{id}"""
+    """
+    **Exclui título a pagar (cancelamento).**
+
+    Esta tool permite excluir/cancelar um título a pagar que foi lançado
+    incorretamente ou que não será mais pago. Use com cuidado, pois a
+    exclusão é permanente.
+
+    **Quando usar:**
+    - Para cancelar títulos lançados incorretamente
+    - Para excluir duplicatas de lançamentos
+    - Para cancelar títulos negociados/perdoados
+    - Para correção de erros de lançamento
+
+    **Restrições:**
+    - **Não pode excluir títulos já pagos**: Use estorno se necessário
+    - **Exclusão é permanente**: Não há como recuperar
+    - **Requer permissão**: Usuário deve ter permissão de exclusão
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o Título:** Use `consultar_titulo_pagar` para obter o ID.
+    2. **Valide:** Confirme que o título está pendente (não pago).
+    3. **Exclua:** Chame `excluir_titulo` com o ID.
+
+    **Parâmetros:**
+    - `id` (str, obrigatório): Código do título a pagar a ser excluído.
+      Obter via: `consultar_titulo_pagar`
+      Exemplo: "12345"
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Excluir título lançado incorretamente
+    # Primeiro, consultar para confirmar
+    titulos = consultar_titulo_pagar(
+        titulo_pagar_codigo=12345
+    )
+    
+    if titulos[0]["situacao"] == "PENDENTE":
+        excluir_titulo(id="12345")
+        print("Título excluído com sucesso")
+    else:
+        print("Não é possível excluir título já pago")
+
+    # Cenário 2: Excluir duplicata de lançamento
+    # Identificar duplicatas
+    titulos = consultar_titulo_pagar(
+        fornecedor_codigo=456,
+        data_inicial="2025-01-01",
+        data_final="2025-01-10"
+    )
+    
+    # Verificar duplicatas pelo número do documento
+    duplicatas = {}
+    for t in titulos:
+        doc = t["numeroDocumento"]
+        if doc in duplicatas:
+            # Excluir a duplicata
+            excluir_titulo(id=str(t["codigo"]))
+        else:
+            duplicatas[doc] = t
+
+    # Cenário 3: Cancelar título negociado
+    excluir_titulo(id="12347")
+    # Nota: Registre a negociação em observações antes de excluir
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_titulo_pagar` (para obter ID e validar)
+
+    **Tools Relacionadas:**
+    - `consultar_titulo_pagar` - Consultar títulos a pagar
+    - `incluir_titulo_pagar` - Criar novo título
+    - `pagar_titulo_pagar` - Pagar título
+
+    **Alternativas:**
+    - **Para títulos pagos incorretamente**: Use estorno (se disponível)
+    - **Para cancelamento com histórico**: Considere marcar como cancelado
+      ao invés de excluir
+
+    **Atenção:**
+    Esta operação é **irreversível**. Sempre valide o título antes de excluir
+    e mantenha registro da exclusão em sistemas externos se necessário.
+
+    **Dica de Auditoria:**
+    Antes de excluir, registre as informações do título em log ou sistema
+    externo para manter histórico de auditoria.
+    """
     endpoint = f"/INTEGRACAO/TITULO_PAGAR/{id}"
     params = {}
 
@@ -5097,7 +5721,105 @@ def excluir_prazo_tabela_preco_item(id: str) -> str:
 
 @mcp.tool()
 def receber_titulo_cartao(id: str, dados: Dict[str, Any]) -> str:
-    """receberTituloCartao - PUT /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/RECEBER_TITULO_EM_CARTAO"""
+    """
+    **Recebe título a receber com cartão (baixa específica).**
+
+    Esta tool permite dar baixa em títulos a receber especificamente com cartão
+    de crédito/débito, registrando detalhes da transação como bandeira, NSU,
+    administradora e taxas. É mais específica que `receber_titulo_convertido`.
+
+    **Quando usar:**
+    - Para receber duplicatas com cartão
+    - Para registrar transações de cartão em títulos
+    - Para conciliação com administradoras
+    - Para controle detalhado de recebíveis
+
+    **Diferença para receber_titulo_convertido:**
+    - `receber_titulo_cartao`: Específico para cartões, com detalhes da transação
+    - `receber_titulo_convertido`: Genérico, aceita várias formas de pagamento
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o Título:** Use `consultar_titulo_receber` para obter o ID.
+    2. **Prepare os Dados:** Monte objeto com detalhes da transação de cartão.
+    3. **Registre o Recebimento:** Chame `receber_titulo_cartao`.
+
+    **Parâmetros:**
+    - `id` (str, obrigatório): Código do título/pedido a receber.
+      Obter via: `consultar_titulo_receber` ou `consultar_pedido`
+      Exemplo: "12345"
+    - `dados` (Dict, obrigatório): Objeto com detalhes da transação.
+      Campos:
+      * `valorRecebido` (float, obrigatório): Valor recebido
+      * `dataRecebimento` (str, obrigatório): Data (YYYY-MM-DD)
+      * `bandeira` (str, opcional): Bandeira do cartão
+        Valores: "VISA", "MASTERCARD", "ELO", "AMEX", "HIPERCARD"
+      * `tipoCartao` (str, opcional): Tipo do cartão
+        Valores: "CREDITO", "DEBITO"
+      * `nsu` (str, opcional): NSU da transação
+      * `autorizacao` (str, opcional): Código de autorização
+      * `administradoraCodigo` (int, opcional): Código da administradora
+      * `taxaAdministradora` (float, opcional): Taxa cobrada
+      * `observacao` (str, opcional): Observações
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Receber título com cartão de crédito
+    receber_titulo_cartao(
+        id="12345",
+        dados={
+            "valorRecebido": 500.00,
+            "dataRecebimento": "2025-01-10",
+            "bandeira": "VISA",
+            "tipoCartao": "CREDITO",
+            "nsu": "123456789",
+            "autorizacao": "ABC123",
+            "administradoraCodigo": 1,
+            "taxaAdministradora": 15.00,
+            "observacao": "Pagamento aprovado"
+        }
+    )
+
+    # Cenário 2: Receber com cartão de débito
+    receber_titulo_cartao(
+        id="12346",
+        dados={
+            "valorRecebido": 1000.00,
+            "dataRecebimento": "2025-01-10",
+            "bandeira": "MASTERCARD",
+            "tipoCartao": "DEBITO",
+            "nsu": "987654321",
+            "taxaAdministradora": 10.00
+        }
+    )
+
+    # Cenário 3: Recebimento parcial
+    receber_titulo_cartao(
+        id="12347",
+        dados={
+            "valorRecebido": 250.00,  # Parcial
+            "dataRecebimento": "2025-01-10",
+            "bandeira": "ELO",
+            "tipoCartao": "CREDITO",
+            "observacao": "Pagamento parcial - saldo R$ 250"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_titulo_receber` ou `consultar_pedido` (para obter ID)
+    - Opcional: `consultar_administradora` (para obter administradoraCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_titulo_receber` - Consultar títulos a receber
+    - `receber_titulo_convertido` - Receber com outras formas de pagamento
+    - `consultar_cartao` - Consultar transações de cartões
+    - `consultar_administradora` - Consultar administradoras
+
+    **Nota:**
+    Esta tool é específica para recebimento de pedidos/títulos com cartão.
+    Para recebimentos genéricos ou outras formas de pagamento, use
+    `receber_titulo_convertido`.
+    """
     endpoint = f"/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/RECEBER_TITULO_EM_CARTAO"
     params = {}
 
