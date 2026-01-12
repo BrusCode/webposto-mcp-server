@@ -1567,7 +1567,27 @@ def incluir_prazo_tabela_preco_item(id: str, dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def pedido_compra(dados: Dict[str, Any]) -> str:
-    """pedidoCompra - POST /INTEGRACAO/PEDIDO_COMPRAS"""
+    """
+    **Cria pedido de compra para fornecedor.**
+    
+    Registra solicitação de compra de mercadorias, iniciando o ciclo de
+    aquisição e controle de estoque.
+    
+    **Quando usar:**
+    - Solicitar compra de produtos
+    - Controle de pedidos a fornecedores
+    - Planejamento de estoque
+    
+    **Parâmetros:**
+    - `dados` (dict, obrigatório): Dados do pedido (fornecedor, produtos, quantidades)
+    
+    **Exemplo:**
+    ```python
+    pedido_compra(dados={'fornecedor_codigo': 10, 'itens': [{'produto': 1, 'qtd': 100}]})
+    ```
+    
+    **Tools Relacionadas:** `consultar_compra`, `consultar_trr_pedido`
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/PEDIDO_COMPRAS", data=dados, params=params)
@@ -4324,7 +4344,29 @@ def consultar_pisconfins(ultimo_codigo: Optional[int] = None, limite: Optional[i
 
 @mcp.tool()
 def consultar_trr_pedido(empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, pedido_codigo: Optional[int] = None) -> str:
-    """consultarTrrPedido - GET /INTEGRACAO/PEDIDO_TRR"""
+    """
+    **Consulta TRR (Transferência de Recebimento de Recursos) de pedidos.**
+    
+    Retorna registros de recebimento de mercadorias vinculados a pedidos de compra,
+    essencial para controle de entrada de estoque.
+    
+    **Quando usar:**
+    - Acompanhar recebimento de pedidos
+    - Controle de entrada de mercadorias
+    - Validação de entregas
+    
+    **Parâmetros:**
+    - `pedido_codigo` (int, opcional): Código do pedido
+    - `data_inicial`, `data_final` (str, opcional): Período (YYYY-MM-DD)
+    - `empresa_codigo` (int, opcional): Código da empresa
+    
+    **Exemplo:**
+    ```python
+    trr = consultar_trr_pedido(pedido_codigo=123, empresa_codigo=1)
+    ```
+    
+    **Tools Relacionadas:** `pedido_compra`, `consultar_compra`
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -6572,7 +6614,29 @@ def consultar_cartoes_clubgas(nome_tabela: str) -> str:
 
 @mcp.tool()
 def consultar_compra_item(turno: Optional[int] = None, empresa_codigo: Optional[int] = None, usa_produto_lmc: Optional[bool] = None, compra_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, situacao: Optional[str] = None) -> str:
-    """consultarCompraItem - GET /INTEGRACAO/COMPRA_ITEM"""
+    """
+    **Consulta itens de compras (produtos adquiridos).**
+    
+    Retorna detalhamento de produtos em notas fiscais de entrada, com
+    quantidades, preços e informações fiscais.
+    
+    **Quando usar:**
+    - Detalhar produtos de uma compra
+    - Análise de preços de aquisição
+    - Controle de estoque por entrada
+    
+    **Parâmetros:**
+    - `compra_codigo` (int, opcional): Código da compra
+    - `data_inicial`, `data_final` (str, opcional): Período
+    - `empresa_codigo` (int, opcional): Código da empresa
+    
+    **Exemplo:**
+    ```python
+    itens = consultar_compra_item(compra_codigo=1234, empresa_codigo=1)
+    ```
+    
+    **Tools Relacionadas:** `consultar_compra`, `consultar_produto`
+    """
     params = {}
     if turno is not None:
         params["turno"] = turno
@@ -6602,7 +6666,30 @@ def consultar_compra_item(turno: Optional[int] = None, empresa_codigo: Optional[
 
 @mcp.tool()
 def consultar_compra(turno: Optional[int] = None, empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, tipo_data: Optional[str] = None, nota_serie: Optional[str] = None, nota_numero: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, venda_codigo: Optional[list] = None, situacao: Optional[str] = None) -> str:
-    """consultarCompra - GET /INTEGRACAO/COMPRA"""
+    """
+    **Consulta compras de mercadorias.**
+    
+    Retorna notas fiscais de entrada (compras) de fornecedores, essencial para
+    gestão de estoque e controle fiscal.
+    
+    **Quando usar:**
+    - Consultar histórico de compras
+    - Controle de recebimento de mercadorias
+    - Auditoria fiscal de entradas
+    
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, opcional): Período (YYYY-MM-DD)
+    - `empresa_codigo` (int, opcional): Código da empresa
+    - `nota_numero`, `nota_serie` (str, opcional): Identificar nota específica
+    - `situacao` (str, opcional): Filtrar por status
+    
+    **Exemplo:**
+    ```python
+    compras = consultar_compra(data_inicial='2025-01-01', data_final='2025-01-31', empresa_codigo=1)
+    ```
+    
+    **Tools Relacionadas:** `consultar_compra_item`, `consultar_compra_xml`
+    """
     params = {}
     if turno is not None:
         params["turno"] = turno
@@ -6634,7 +6721,27 @@ def consultar_compra(turno: Optional[int] = None, empresa_codigo: Optional[int] 
 
 @mcp.tool()
 def consultar_compra_xml(chave_nfe: str) -> str:
-    """consultarCompraXml - GET /INTEGRACAO/COMPRA/{chaveNfe}/XML"""
+    """
+    **Consulta XML de nota fiscal de compra.**
+    
+    Retorna arquivo XML completo da NFe de entrada para validação fiscal
+    e integrações contábeis.
+    
+    **Quando usar:**
+    - Validação fiscal de entradas
+    - Integração com sistemas contábeis
+    - Auditoria de documentos fiscais
+    
+    **Parâmetros:**
+    - `chave_nfe` (str, obrigatório): Chave de acesso da NFe (44 dígitos)
+    
+    **Exemplo:**
+    ```python
+    xml = consultar_compra_xml(chave_nfe='35250112345678901234550010000123451234567890')
+    ```
+    
+    **Tools Relacionadas:** `consultar_compra`, `consultar_nota_entrada`
+    """
     params = {}
 
     result = client.get("/INTEGRACAO/COMPRA/{chaveNfe}/XML", params=params)
