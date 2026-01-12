@@ -1535,7 +1535,28 @@ def incluir_produto_comissao(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def incluir_prazo_tabela_preco_item(id: str, dados: Dict[str, Any]) -> str:
-    """incluirPrazoTabelaPrecoItem - POST /INTEGRACAO/PRAZO_TABELA_PRECO/{id}/ITEM"""
+    """
+    **Inclui item em tabela de preços com prazo.**
+    
+    Adiciona produto a uma tabela de preços específica com condições de prazo,
+    permitindo preços diferenciados por forma de pagamento.
+    
+    **Quando usar:**
+    - Configurar preços por prazo de pagamento
+    - Criar promoções com condições especiais
+    - Gestão de tabelas de preço
+    
+    **Parâmetros:**
+    - `id` (str, obrigatório): ID da tabela de preços
+    - `dados` (dict, obrigatório): Dados do item (produto, preço, prazo)
+    
+    **Exemplo:**
+    ```python
+    incluir_prazo_tabela_preco_item(id='123', dados={'produto_codigo': 10, 'preco': 5.50})
+    ```
+    
+    **Tools Relacionadas:** `excluir_prazo_tabela_preco_item`, `tabela_preco_prazo`
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/PRAZO_TABELA_PRECO/{id}/ITEM", data=dados, params=params)
@@ -3293,7 +3314,29 @@ def consultar_usuario(ultimo_codigo: Optional[int] = None, limite: Optional[int]
 
 @mcp.tool()
 def troca_preco(data_inicial: str, data_final: str, realizada: Optional[bool] = None, tipo_produto: Optional[str] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """trocaPreco - GET /INTEGRACAO/TROCA_PRECO"""
+    """
+    **Consulta reajustes de preços em lote.**
+    
+    Retorna histórico de operações de reajuste de preços realizadas em lote,
+    permitindo auditoria e controle de políticas de precificação.
+    
+    **Quando usar:**
+    - Auditoria de reajustes de preços
+    - Acompanhar políticas de precificação
+    - Relatórios de gestão comercial
+    
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, obrigatório): Período (YYYY-MM-DD)
+    - `realizada` (bool, opcional): Filtrar por status de execução
+    - `tipo_produto` (str, opcional): Filtrar por tipo (C=Combustível, etc.)
+    
+    **Exemplo:**
+    ```python
+    reajustes = troca_preco(data_inicial='2025-01-01', data_final='2025-01-31', realizada=True)
+    ```
+    
+    **Tools Relacionadas:** `reajustar_produto`, `alterar_preco_combustivel`
+    """
     params = {}
     if data_inicial is not None:
         params["dataInicial"] = data_inicial
@@ -3421,7 +3464,28 @@ def consultar_tanque(tanque_codigo: Optional[int] = None, empresa_codigo: Option
 
 @mcp.tool()
 def tabela_preco_prazo(tabela_preco_prazo_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """tabelaPrecoPrazo - GET /INTEGRACAO/TABELA_PRECO_PRAZO"""
+    """
+    **Consulta tabelas de preços com prazo.**
+    
+    Retorna configurações de tabelas de preços diferenciados por prazo
+    de pagamento (à vista, 7 dias, 15 dias, etc.).
+    
+    **Quando usar:**
+    - Listar tabelas de preço ativas
+    - Consultar políticas comerciais
+    - Gestão de promoções
+    
+    **Parâmetros:**
+    - `tabela_preco_prazo_codigo` (int, opcional): Código específico
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    
+    **Exemplo:**
+    ```python
+    tabelas = tabela_preco_prazo(limite=50)
+    ```
+    
+    **Tools Relacionadas:** `incluir_prazo_tabela_preco_item`, `excluir_prazo_tabela_preco_item`
+    """
     params = {}
     if tabela_preco_prazo_codigo is not None:
         params["tabelaPrecoPrazoCodigo"] = tabela_preco_prazo_codigo
@@ -6371,7 +6435,29 @@ def consultar_preco_idenfitid() -> str:
 
 @mcp.tool()
 def consultar_lmc(data_inicial: str, data_final: str, empresa_codigo: Optional[list] = None, venda_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, quitado: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, origem: Optional[str] = None) -> str:
-    """consultarLmc - GET /INTEGRACAO/CONSULTAR_LMC_REDE"""
+    """
+    **Consulta Lucro Máximo de Contribuição (LMC) por venda.**
+    
+    Retorna análise de rentabilidade detalhada por venda, calculando LMC
+    (margem de contribuição) para avaliação de performance comercial.
+    
+    **Quando usar:**
+    - Análise de rentabilidade por venda
+    - Avaliação de margens de contribuição
+    - Relatórios gerenciais de lucratividade
+    
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, obrigatório): Período (YYYY-MM-DD)
+    - `empresa_codigo` (list, opcional): Lista de códigos de empresas
+    - `quitado` (bool, opcional): Filtrar por status de pagamento
+    
+    **Exemplo:**
+    ```python
+    lmc = consultar_lmc(data_inicial='2025-01-01', data_final='2025-01-31')
+    ```
+    
+    **Tools Relacionadas:** `consultar_lmc_1`, `consultar_produto_lmc_lmp`
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -6399,7 +6485,27 @@ def consultar_lmc(data_inicial: str, data_final: str, empresa_codigo: Optional[l
 
 @mcp.tool()
 def consultar_lmc_1(data_inicial: str, data_final: str, empresa_codigo: Optional[list] = None, venda_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, quitado: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, origem: Optional[str] = None) -> str:
-    """consultarLmc_1 - GET /INTEGRACAO/LMC"""
+    """
+    **Consulta LMC (endpoint alternativo).**
+    
+    Versão alternativa da consulta de Lucro Máximo de Contribuição,
+    com mesma funcionalidade mas endpoint diferente.
+    
+    **Quando usar:**
+    - Mesmos casos de uso que `consultar_lmc`
+    - Usar se `consultar_lmc` apresentar problemas
+    
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, obrigatório): Período
+    - `empresa_codigo` (list, opcional): Lista de empresas
+    
+    **Exemplo:**
+    ```python
+    lmc = consultar_lmc_1(data_inicial='2025-01-01', data_final='2025-01-31')
+    ```
+    
+    **Tools Relacionadas:** `consultar_lmc`
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -7420,7 +7526,27 @@ def excluir_titulo(id: str) -> str:
 
 @mcp.tool()
 def excluir_prazo_tabela_preco_item(id: str) -> str:
-    """excluirPrazoTabelaPrecoItem - DELETE /INTEGRACAO/PRAZO_TABELA_PRECO_ITEM/{id}"""
+    """
+    **Exclui item de tabela de preços com prazo.**
+    
+    Remove produto de uma tabela de preços específica, desvinculando
+    condições de preço por prazo.
+    
+    **Quando usar:**
+    - Remover produtos de promoções
+    - Limpar tabelas de preço obsoletas
+    - Ajustar políticas comerciais
+    
+    **Parâmetros:**
+    - `id` (str, obrigatório): ID do item a excluir
+    
+    **Exemplo:**
+    ```python
+    excluir_prazo_tabela_preco_item(id='456')
+    ```
+    
+    **Tools Relacionadas:** `incluir_prazo_tabela_preco_item`, `tabela_preco_prazo`
+    """
     endpoint = f"/INTEGRACAO/PRAZO_TABELA_PRECO_ITEM/{id}"
     params = {}
 
