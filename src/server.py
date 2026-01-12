@@ -7780,7 +7780,27 @@ def receber_titulo_cartao(id: str, dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def incluir_pedido(dados: Dict[str, Any]) -> str:
-    """incluirPedido - POST /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO"""
+    """
+    **Cria novo pedido de combustível.**
+    
+    Registra pedido de combustível para clientes, iniciando o ciclo
+    de faturamento e entrega.
+    
+    **Quando usar:**
+    - Criar pedidos de combustível
+    - Vendas para frotas
+    - Gestão de pedidos B2B
+    
+    **Parâmetros:**
+    - `dados` (dict, obrigatório): Dados do pedido (cliente, produtos, quantidades)
+    
+    **Exemplo:**
+    ```python
+    incluir_pedido(dados={'cliente_codigo': 10, 'itens': [{'produto': 1, 'qtd': 1000}]})
+    ```
+    
+    **Tools Relacionadas:** `consultar_pedido`, `pedido_faturar`
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO", data=dados, params=params)
@@ -7791,7 +7811,28 @@ def incluir_pedido(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def pedido_faturar(id: str, dados: Dict[str, Any]) -> str:
-    """pedidoFaturar - POST /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/FATURAR"""
+    """
+    **Fatura pedido de combustível.**
+    
+    Converte pedido em venda, gerando nota fiscal e registrando
+    movimentação de estoque.
+    
+    **Quando usar:**
+    - Faturar pedidos aprovados
+    - Gerar NFe de pedidos
+    - Finalizar ciclo de vendas B2B
+    
+    **Parâmetros:**
+    - `id` (str, obrigatório): ID do pedido
+    - `dados` (dict, obrigatório): Dados de faturamento
+    
+    **Exemplo:**
+    ```python
+    pedido_faturar(id='123', dados={'forma_pagamento': 'prazo'})
+    ```
+    
+    **Tools Relacionadas:** `consultar_pedido`, `pedido_danfe`
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/FATURAR", data=dados, params=params)
@@ -7802,7 +7843,27 @@ def pedido_faturar(id: str, dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def pedido_danfe(id: str) -> str:
-    """pedidoDanfe - POST /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/DANFE"""
+    """
+    **Gera DANFE do pedido faturado.**
+    
+    Retorna DANFE (Documento Auxiliar da NFe) em PDF para impressão
+    e entrega ao cliente.
+    
+    **Quando usar:**
+    - Imprimir DANFE de pedidos faturados
+    - Enviar comprovante fiscal ao cliente
+    - Documentar entregas
+    
+    **Parâmetros:**
+    - `id` (str, obrigatório): ID do pedido faturado
+    
+    **Exemplo:**
+    ```python
+    danfe = pedido_danfe(id='123')
+    ```
+    
+    **Tools Relacionadas:** `pedido_faturar`, `pedido_xml`
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/DANFE", data=dados, params=params)
@@ -7896,7 +7957,27 @@ def consultar_produto_combustivel() -> str:
 
 @mcp.tool()
 def consultar_pedido(id: str) -> str:
-    """consultarPedido - GET /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}"""
+    """
+    **Consulta pedido de combustível específico.**
+    
+    Retorna detalhes completos de um pedido de combustível, incluindo
+    itens, status e informações fiscais.
+    
+    **Quando usar:**
+    - Consultar detalhes de pedido específico
+    - Acompanhar status de pedidos
+    - Integrações com sistemas externos
+    
+    **Parâmetros:**
+    - `id` (str, obrigatório): ID do pedido
+    
+    **Exemplo:**
+    ```python
+    pedido = consultar_pedido(id='123')
+    ```
+    
+    **Tools Relacionadas:** `incluir_pedido`, `pedido_status`
+    """
     params = {}
 
     result = client.get("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}", params=params)
@@ -7907,7 +7988,27 @@ def consultar_pedido(id: str) -> str:
 
 @mcp.tool()
 def excluir_pedido(id: str) -> str:
-    """excluirPedido - DELETE /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}"""
+    """
+    **Exclui pedido de combustível.**
+    
+    Remove pedido não faturado do sistema. Pedidos já faturados
+    não podem ser excluídos.
+    
+    **Quando usar:**
+    - Cancelar pedidos não faturados
+    - Correção de erros de cadastro
+    - Gestão de pedidos pendentes
+    
+    **Parâmetros:**
+    - `id` (str, obrigatório): ID do pedido a excluir
+    
+    **Exemplo:**
+    ```python
+    excluir_pedido(id='123')
+    ```
+    
+    **Tools Relacionadas:** `consultar_pedido`, `pedido_status`
+    """
     endpoint = f"/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}"
     params = {}
 
@@ -7919,7 +8020,27 @@ def excluir_pedido(id: str) -> str:
 
 @mcp.tool()
 def pedido_xml(id: str) -> str:
-    """pedidoXml - GET /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/XML"""
+    """
+    **Retorna XML da NFe do pedido.**
+    
+    Obtém arquivo XML completo da NFe gerada no faturamento do pedido
+    para integrações e validações fiscais.
+    
+    **Quando usar:**
+    - Integrações contábeis
+    - Validação fiscal
+    - Envio de NFe ao cliente
+    
+    **Parâmetros:**
+    - `id` (str, obrigatório): ID do pedido faturado
+    
+    **Exemplo:**
+    ```python
+    xml = pedido_xml(id='123')
+    ```
+    
+    **Tools Relacionadas:** `pedido_danfe`, `pedido_faturar`
+    """
     params = {}
 
     result = client.get("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/XML", params=params)
@@ -7930,7 +8051,27 @@ def pedido_xml(id: str) -> str:
 
 @mcp.tool()
 def pedido_status(pedidos: Optional[list] = None) -> str:
-    """pedidoStatus - GET /INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/STATUS"""
+    """
+    **Consulta status de múltiplos pedidos.**
+    
+    Retorna status atual de uma lista de pedidos (pendente, faturado,
+    cancelado, etc.) para acompanhamento em lote.
+    
+    **Quando usar:**
+    - Monitorar múltiplos pedidos
+    - Dashboards de gestão
+    - Integrações com sistemas externos
+    
+    **Parâmetros:**
+    - `pedidos` (list, opcional): Lista de IDs de pedidos
+    
+    **Exemplo:**
+    ```python
+    status = pedido_status(pedidos=['123', '124', '125'])
+    ```
+    
+    **Tools Relacionadas:** `consultar_pedido`, `pedido_faturar`
+    """
     params = {}
     if pedidos is not None:
         params["pedidos"] = pedidos
