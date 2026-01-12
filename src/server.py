@@ -480,7 +480,74 @@ def alterar_cliente_grupo(id: str, dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def alterar_cliente(id: str, dados: Dict[str, Any]) -> str:
-    """alterarCliente - PUT /INTEGRACAO/CLIENTE/{id}"""
+    """
+    **Altera dados cadastrais de um cliente existente.**
+
+    Esta tool permite atualizar informações de clientes já cadastrados no sistema,
+    como endereço, telefone, email, observações, etc.
+
+    **Quando usar:**
+    - Para atualizar dados cadastrais de clientes
+    - Para correção de informações
+    - Para manutenção de cadastro
+    - Para sincronização com sistemas externos
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID do Cliente:** Use `consultar_cliente` para obter o código.
+    2. **Prepare os Dados:** Monte objeto apenas com campos a alterar.
+    3. **Atualize:** Chame `alterar_cliente` com ID e dados.
+
+    **Parâmetros:**
+    - `id` (str, obrigatório): Código do cliente a ser alterado.
+      Obter via: `consultar_cliente`
+      Exemplo: "123"
+    - `dados` (Dict, obrigatório): Objeto com campos a alterar.
+      Campos possíveis:
+      * `nome` (str): Nome/Razão social
+      * `telefone` (str): Telefone
+      * `email` (str): E-mail
+      * `endereco` (str): Endereço
+      * `bairro` (str): Bairro
+      * `cidade` (str): Cidade
+      * `estado` (str): UF
+      * `cep` (str): CEP
+      * `observacao` (str): Observações
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Atualizar telefone e email
+    alterar_cliente(
+        id="123",
+        dados={
+            "telefone": "11999998888",
+            "email": "novoemail@exemplo.com"
+        }
+    )
+
+    # Cenário 2: Atualizar endereço completo
+    alterar_cliente(
+        id="456",
+        dados={
+            "endereco": "Rua Nova, 456",
+            "bairro": "Jardim Exemplo",
+            "cidade": "São Paulo",
+            "estado": "SP",
+            "cep": "01234567"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_cliente` (para obter ID do cliente)
+
+    **Tools Relacionadas:**
+    - `consultar_cliente` - Consultar clientes
+    - `incluir_cliente` - Cadastrar novo cliente
+
+    **Nota:**
+    Apenas os campos enviados no objeto `dados` serão alterados.
+    Campos não informados permanecem inalterados.
+    """
     endpoint = f"/INTEGRACAO/CLIENTE/{id}"
     params = {}
 
@@ -492,7 +559,75 @@ def alterar_cliente(id: str, dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def alterar_produto(id: str, dados: Dict[str, Any], empresa_codigo: Optional[int] = None) -> str:
-    """alterarProduto - PUT /INTEGRACAO/ALTERAR_PRODUTO/{id}"""
+    """
+    **Altera dados cadastrais de um produto existente.**
+
+    Esta tool permite atualizar informações de produtos já cadastrados, como descrição,
+    preços, grupo, unidade de medida, etc.
+
+    **Quando usar:**
+    - Para atualizar descrição de produtos
+    - Para alterar grupo ou categoria
+    - Para correção de informações cadastrais
+    - Para manutenção de catálogo
+
+    **Arquitetura Multi-Tenant:**
+    Alterações no produto afetam o cadastro global (nível rede). Para alterar
+    preços ou estoques específicos de uma unidade, use `reajustar_produto` ou
+    outras tools específicas.
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID do Produto:** Use `consultar_produto` para obter o código.
+    2. **Prepare os Dados:** Monte objeto apenas com campos a alterar.
+    3. **Atualize:** Chame `alterar_produto` com ID e dados.
+
+    **Parâmetros:**
+    - `id` (str, obrigatório): Código do produto a ser alterado.
+      Obter via: `consultar_produto`
+      Exemplo: "123"
+    - `dados` (Dict, obrigatório): Objeto com campos a alterar.
+      Campos possíveis:
+      * `descricao` (str): Descrição do produto
+      * `grupoCodigo` (int): Código do grupo
+      * `unidadeMedida` (str): Unidade (UN, LT, KG, etc.)
+      * `codigoBarras` (str): Código de barras
+      * `observacao` (str): Observações
+    - `empresa_codigo` (int, opcional): Código da empresa (contexto).
+      Exemplo: 7
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Atualizar descrição
+    alterar_produto(
+        id="123",
+        dados={
+            "descricao": "Gasolina Comum - Nova Descrição"
+        },
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Alterar grupo do produto
+    alterar_produto(
+        id="456",
+        dados={
+            "grupoCodigo": 5,
+            "observacao": "Reclassificado em 2025-01-12"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_produto` (para obter ID do produto)
+
+    **Tools Relacionadas:**
+    - `consultar_produto` - Consultar produtos
+    - `incluir_produto` - Cadastrar novo produto
+    - `reajustar_produto` - Reajustar preços
+
+    **Nota Importante:**
+    Para alterar preços específicos de uma unidade, use `reajustar_produto`.
+    Esta tool altera apenas dados cadastrais gerais do produto.
+    """
     endpoint = f"/INTEGRACAO/ALTERAR_PRODUTO/{id}"
     params = {}
     if empresa_codigo is not None:
@@ -1082,7 +1217,112 @@ def pedido_compra(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def consultar_cliente(cliente_codigo_externo: Optional[str] = None, cliente_codigo: Optional[list] = None, empresa_codigo: Optional[int] = None, retorna_observacoes: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, frota: Optional[bool] = None, faturamento: Optional[bool] = None, limites_bloqueios: Optional[bool] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarCliente - GET /INTEGRACAO/CLIENTE"""
+    """
+    **Consulta clientes cadastrados no sistema.**
+
+    Esta tool retorna informações detalhadas de clientes (pessoas físicas e jurídicas),
+    incluindo dados cadastrais, limites de crédito, bloqueios, informações de frota e
+    faturamento. É essencial para gestão de relacionamento com clientes.
+
+    **Quando usar:**
+    - Para buscar dados cadastrais de clientes
+    - Para verificar limites de crédito e bloqueios
+    - Para consultar clientes de frota
+    - Para integrações com sistemas externos
+    - Para validação de clientes antes de vendas
+
+    **Arquitetura Multi-Tenant:**
+    No webPosto, clientes são compartilhados entre unidades da mesma rede, mas podem
+    ter configurações específicas por unidade (limites, bloqueios, preços especiais).
+
+    **Fluxo de Uso Essencial:**
+    1. **Execute a Consulta:** Chame `consultar_cliente` com filtros desejados.
+    2. **Processe os Resultados:** Use os dados retornados conforme necessidade.
+
+    **Parâmetros:**
+    - `cliente_codigo` (List[int], opcional): Lista de códigos de clientes específicos.
+      Exemplo: [123, 456, 789]
+    - `cliente_codigo_externo` (str, opcional): Código externo do cliente (integração).
+      Exemplo: "CLI-EXT-001"
+    - `empresa_codigo` (int, opcional): Filtrar clientes ativos em empresa específica.
+      Obter via: `consultar_empresa`
+      Exemplo: 7
+    - `frota` (bool, opcional): Se True, retorna apenas clientes de frota.
+      Exemplo: True
+    - `faturamento` (bool, opcional): Se True, inclui dados de faturamento.
+      Exemplo: True
+    - `limites_bloqueios` (bool, opcional): Se True, inclui limites de crédito e bloqueios.
+      Muito útil para validação de vendas.
+      Exemplo: True
+    - `retorna_observacoes` (bool, opcional): Se True, inclui observações cadastrais.
+      Exemplo: True
+    - `data_hora_atualizacao` (str, opcional): Retorna clientes atualizados após data/hora.
+      Formato: "YYYY-MM-DD HH:MM:SS"
+      Exemplo: "2025-01-10 08:00:00"
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação, código do último cliente retornado.
+
+    **Retorno:**
+    Lista de clientes contendo:
+    - Código do cliente
+    - Nome/Razão social
+    - CPF/CNPJ
+    - Endereço completo
+    - Telefones e email
+    - Tipo (PF/PJ)
+    - Situação (ativo/inativo/bloqueado)
+    - Limite de crédito (se solicitado)
+    - Bloqueios (se solicitado)
+    - Dados de frota (se cliente de frota)
+    - Observações (se solicitado)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Buscar cliente específico por código
+    cliente = consultar_cliente(
+        cliente_codigo=[123],
+        limites_bloqueios=True
+    )
+
+    # Cenário 2: Listar clientes de frota
+    clientes_frota = consultar_cliente(
+        frota=True,
+        empresa_codigo=7,
+        limite=50
+    )
+
+    # Cenário 3: Validar cliente antes de venda (verificar bloqueios)
+    validacao = consultar_cliente(
+        cliente_codigo=[456],
+        limites_bloqueios=True,
+        faturamento=True
+    )
+    
+    if validacao[0]["bloqueado"]:
+        print("Cliente bloqueado! Venda não permitida.")
+    elif validacao[0]["limiteDisponivel"] < valor_venda:
+        print("Limite de crédito insuficiente!")
+
+    # Cenário 4: Sincronização incremental (clientes atualizados)
+    novos = consultar_cliente(
+        data_hora_atualizacao="2025-01-10 00:00:00",
+        limite=500
+    )
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresa` (para obter empresa_codigo)
+
+    **Tools Relacionadas:**
+    - `incluir_cliente` - Cadastrar novo cliente
+    - `alterar_cliente` - Alterar dados do cliente
+    - `consultar_cliente_empresa` - Relação cliente-empresa
+    - `cliente_frota` - Dados específicos de frota
+
+    **Dica de Integração:**
+    Use `cliente_codigo_externo` para manter sincronização com sistemas externos,
+    permitindo buscar clientes pelo código do seu sistema.
+    """
     params = {}
     if cliente_codigo_externo is not None:
         params["clienteCodigoExterno"] = cliente_codigo_externo
@@ -1112,7 +1352,117 @@ def consultar_cliente(cliente_codigo_externo: Optional[str] = None, cliente_codi
 
 @mcp.tool()
 def incluir_cliente(dados: Dict[str, Any]) -> str:
-    """incluirCliente - POST /INTEGRACAO/CLIENTE"""
+    """
+    **Cadastra um novo cliente no sistema.**
+
+    Esta tool permite criar um novo cliente (pessoa física ou jurídica) no webPosto,
+    incluindo todos os dados cadastrais necessários. O cliente criado fica disponível
+    para todas as unidades da rede (multi-tenant).
+
+    **Quando usar:**
+    - Para cadastrar novos clientes
+    - Para integrações com sistemas externos
+    - Para importação de base de clientes
+    - Para cadastro via API/automação
+
+    **Arquitetura Multi-Tenant:**
+    Cliente é criado no nível da rede e fica disponível para todas as unidades.
+    Use `vincular_cliente_unidade_negocio` para ativar o cliente em unidades específicas
+    com configurações próprias (limites, bloqueios, preços).
+
+    **Fluxo de Uso Essencial:**
+    1. **Prepare os Dados:** Monte o objeto com informações do cliente.
+    2. **Crie o Cliente:** Chame `incluir_cliente` com os dados.
+    3. **Vincule à Unidade (Opcional):** Use `vincular_cliente_unidade_negocio`.
+
+    **Parâmetros (via objeto `dados`):**
+    - `nome` (str, obrigatório): Nome completo (PF) ou Razão Social (PJ).
+      Exemplo: "João da Silva" ou "Posto Exemplo LTDA"
+    - `cpfCnpj` (str, obrigatório): CPF (11 dígitos) ou CNPJ (14 dígitos).
+      Exemplo: "12345678901" ou "12345678000190"
+    - `tipo` (str, obrigatório): Tipo do cliente.
+      Valores: "F" (Física) ou "J" (Jurídica)
+    - `telefone` (str, opcional): Telefone principal.
+      Exemplo: "11987654321"
+    - `email` (str, opcional): E-mail do cliente.
+      Exemplo: "cliente@exemplo.com"
+    - `endereco` (str, opcional): Endereço completo.
+      Exemplo: "Rua Exemplo, 123"
+    - `bairro` (str, opcional): Bairro.
+    - `cidade` (str, opcional): Cidade.
+    - `estado` (str, opcional): UF (2 letras).
+      Exemplo: "SP"
+    - `cep` (str, opcional): CEP (8 dígitos).
+      Exemplo: "01234567"
+    - `codigoExterno` (str, opcional): Código do cliente no sistema externo.
+      Muito útil para integrações.
+      Exemplo: "CLI-EXT-001"
+    - `observacao` (str, opcional): Observações gerais.
+
+    **Retorno:**
+    Dados do cliente criado incluindo:
+    - Código do cliente (clienteCodigo)
+    - Dados cadastrais confirmados
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Cadastrar cliente pessoa física
+    cliente_pf = incluir_cliente(
+        dados={
+            "nome": "João da Silva",
+            "cpfCnpj": "12345678901",
+            "tipo": "F",
+            "telefone": "11987654321",
+            "email": "joao@exemplo.com",
+            "endereco": "Rua Exemplo, 123",
+            "bairro": "Centro",
+            "cidade": "São Paulo",
+            "estado": "SP",
+            "cep": "01234567"
+        }
+    )
+
+    # Cenário 2: Cadastrar cliente pessoa jurídica
+    cliente_pj = incluir_cliente(
+        dados={
+            "nome": "Transportadora Exemplo LTDA",
+            "cpfCnpj": "12345678000190",
+            "tipo": "J",
+            "telefone": "1133334444",
+            "email": "contato@transportadora.com",
+            "codigoExterno": "TRANSP-001"
+        }
+    )
+
+    # Cenário 3: Integração com sistema externo
+    cliente_integrado = incluir_cliente(
+        dados={
+            "nome": "Cliente Importado",
+            "cpfCnpj": "98765432100",
+            "tipo": "F",
+            "codigoExterno": "ERP-CLI-9876",  # Mantém referência
+            "observacao": "Importado do ERP em 2025-01-12"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Nenhuma (tool independente)
+
+    **Tools Relacionadas:**
+    - `consultar_cliente` - Consultar clientes cadastrados
+    - `alterar_cliente` - Alterar dados do cliente
+    - `vincular_cliente_unidade_negocio` - Vincular cliente a unidade
+
+    **Validações Importantes:**
+    - CPF/CNPJ deve ser válido e único no sistema
+    - Nome é obrigatório
+    - Tipo deve ser "F" ou "J"
+
+    **Dica:**
+    Use `codigoExterno` para manter sincronização com sistemas externos,
+    facilitando buscas e atualizações posteriores.
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/CLIENTE", data=dados, params=params)
@@ -2421,7 +2771,114 @@ def consultar_produto_empresa(data_hora_atualizacao: Optional[str] = None, usa_p
 
 @mcp.tool()
 def consultar_produto(empresa_codigo: Optional[int] = None, produto_codigo: Optional[int] = None, produto_codigo_externo: Optional[str] = None, grupo_codigo: Optional[int] = None, usa_produto_lmc: Optional[bool] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarProduto - GET /INTEGRACAO/PRODUTO"""
+    """
+    **Consulta produtos cadastrados no sistema.**
+
+    Esta tool retorna informações detalhadas de produtos (combustíveis, conveniência,
+    lubrificantes, etc.), incluindo códigos, descrições, grupos, preços e configurações.
+    É essencial para gestão de catálogo e vendas.
+
+    **Quando usar:**
+    - Para buscar informações de produtos
+    - Para listar catálogo de produtos
+    - Para integrações com sistemas externos
+    - Para validação de produtos antes de vendas
+    - Para sincronização de preços
+
+    **Arquitetura Multi-Tenant:**
+    Produtos são cadastrados no nível da rede (compartilhados), mas cada unidade
+    pode ter preços, estoques e configurações específicas via tabela
+    `produto_unidade_negocio`. Use `empresa_codigo` para filtrar produtos ativos
+    em uma unidade específica.
+
+    **Tipos de Produtos no webPosto:**
+    - **C**: Combustíveis (gasolina, diesel, etanol, GNV)
+    - **L**: Lubrificantes (óleos, graxas)
+    - **P**: Produtos de conveniência (alimentos, bebidas, acessórios)
+    - **S**: Serviços (lavagem, troca de óleo)
+
+    **Fluxo de Uso Essencial:**
+    1. **Execute a Consulta:** Chame `consultar_produto` com filtros desejados.
+    2. **Processe os Resultados:** Use os dados retornados conforme necessidade.
+
+    **Parâmetros:**
+    - `produto_codigo` (int, opcional): Código específico do produto.
+      Exemplo: 123
+    - `produto_codigo_externo` (str, opcional): Código externo (integração).
+      Exemplo: "PROD-EXT-001"
+    - `empresa_codigo` (int, opcional): Filtrar produtos ativos na empresa.
+      Retorna apenas produtos vinculados à unidade via `produto_unidade_negocio`.
+      Obter via: `consultar_empresa`
+      Exemplo: 7
+    - `grupo_codigo` (int, opcional): Filtrar por grupo de produtos.
+      Obter via: `consultar_grupo`
+      Exemplo: 5
+    - `usa_produto_lmc` (bool, opcional): Filtrar produtos com LMC (Lista de Materiais de Construção).
+      Exemplo: True
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+
+    **Retorno:**
+    Lista de produtos contendo:
+    - Código do produto
+    - Descrição
+    - Tipo (C/L/P/S)
+    - Grupo
+    - Unidade de medida
+    - Código de barras
+    - Situação (ativo/inativo)
+    - Preços (se filtrado por empresa)
+    - Estoque (se filtrado por empresa)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Buscar produto específico
+    produto = consultar_produto(
+        produto_codigo=123,
+        empresa_codigo=7
+    )
+
+    # Cenário 2: Listar todos os combustíveis
+    # Nota: Filtrar por tipo requer consultar_produto_combustivel
+    combustiveis = consultar_produto(
+        grupo_codigo=1,  # Grupo de combustíveis
+        empresa_codigo=7,
+        limite=50
+    )
+
+    # Cenário 3: Buscar por código externo (integração)
+    produto_ext = consultar_produto(
+        produto_codigo_externo="ERP-PROD-789",
+        empresa_codigo=7
+    )
+
+    # Cenário 4: Listar catálogo completo de uma unidade
+    catalogo = consultar_produto(
+        empresa_codigo=7,
+        limite=500
+    )
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresa` (para obter empresa_codigo)
+    - Opcional: `consultar_grupo` (para obter grupo_codigo)
+
+    **Tools Relacionadas:**
+    - `consultar_produto_combustivel` - Produtos combustíveis específicos
+    - `consultar_produto_estoque` - Estoque de produtos
+    - `incluir_produto` - Cadastrar novo produto
+    - `alterar_produto` - Alterar produto
+    - `reajustar_produto` - Reajustar preços
+
+    **Diferença entre consultar_produto e consultar_produto_combustivel:**
+    - `consultar_produto`: Retorna todos os tipos de produtos (genérico)
+    - `consultar_produto_combustivel`: Retorna apenas combustíveis com dados específicos
+      (tanque, bico, ANP, etc.)
+
+    **Dica:**
+    Para vendas, sempre filtre por `empresa_codigo` para obter preços e estoques
+    corretos da unidade específica.
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -3450,7 +3907,98 @@ def estoque(empresa_codigo: Optional[int] = None, data_hora_atualizacao: Optiona
 
 @mcp.tool()
 def consultar_empresa(empresa_codigo_externo: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarEmpresa - GET /INTEGRACAO/EMPRESAS"""
+    """
+    **Consulta empresas/filiais cadastradas no sistema.**
+
+    Esta tool retorna informações das empresas/filiais (unidades de negócio) da rede,
+    incluindo códigos, razão social, CNPJ, endereço e configurações. É essencial
+    para operações multi-tenant.
+
+    **Quando usar:**
+    - Para listar todas as filiais da rede
+    - Para obter `empresa_codigo` para outras tools
+    - Para integrações com sistemas externos
+    - Para validação de unidades de negócio
+    - Para relatórios consolidados
+
+    **Arquitetura Multi-Tenant:**
+    No webPosto, cada empresa/filial é uma unidade de negócio independente.
+    O `empresa_codigo` (ou `empresaCodigo`) é usado em praticamente todas as
+    tools para filtrar dados específicos de cada unidade.
+
+    **Conceito de Empresa no webPosto:**
+    - **Rede**: Conjunto de todas as filiais
+    - **Empresa/Filial**: Unidade de negócio individual (posto)
+    - **Unidade de Negócio**: Sinônimo de empresa/filial
+
+    **Fluxo de Uso Essencial:**
+    1. **Liste as Empresas:** Chame `consultar_empresa` sem filtros.
+    2. **Identifique a Unidade:** Localize o `empresaCodigo` desejado.
+    3. **Use em Outras Tools:** Passe o código para filtrar dados da unidade.
+
+    **Parâmetros:**
+    - `empresa_codigo_externo` (str, opcional): Código externo (integração).
+      Exemplo: "FILIAL-SP-001"
+    - `limite` (int, opcional): Número máximo de registros (default: 100).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+
+    **Retorno:**
+    Lista de empresas contendo:
+    - Código da empresa (empresaCodigo)
+    - Razão social
+    - Nome fantasia
+    - CNPJ
+    - Inscrição estadual
+    - Endereço completo
+    - Telefones
+    - Email
+    - Situação (ativa/inativa)
+    - Código externo (se houver)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todas as filiais da rede
+    empresas = consultar_empresa()
+    
+    for empresa in empresas:
+        print(f"Código: {empresa['empresaCodigo']} - {empresa['nomeFantasia']}")
+
+    # Cenário 2: Buscar empresa específica por código externo
+    filial_sp = consultar_empresa(
+        empresa_codigo_externo="FILIAL-SP-001"
+    )
+
+    # Cenário 3: Obter código para usar em outras tools
+    empresas = consultar_empresa()
+    empresa_codigo = empresas[0]["empresaCodigo"]
+    
+    # Usar o código em outras consultas
+    vendas = consultar_venda(
+        data_inicial="2025-01-01",
+        data_final="2025-01-10",
+        empresa_codigo=empresa_codigo
+    )
+    ```
+
+    **Dependências:**
+    - Nenhuma (tool independente)
+
+    **Tools que Requerem empresa_codigo:**
+    Praticamente todas as tools de consulta e operação requerem ou aceitam
+    `empresa_codigo` como parâmetro para filtrar dados por unidade:
+    - `consultar_venda`
+    - `consultar_produto`
+    - `consultar_cliente`
+    - `consultar_abastecimento`
+    - `consultar_titulo_pagar`
+    - `consultar_titulo_receber`
+    - E muitas outras...
+
+    **Dica Importante:**
+    Sempre que uma tool aceitar `empresa_codigo`, use-o para garantir que os
+    dados retornados sejam específicos da unidade desejada, respeitando o
+    isolamento multi-tenant do sistema.
+    """
     params = {}
     if empresa_codigo_externo is not None:
         params["empresaCodigoExterno"] = empresa_codigo_externo
