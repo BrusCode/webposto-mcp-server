@@ -3015,7 +3015,136 @@ def consultar_venda(turno: Optional[int] = None, empresa_codigo: Optional[int] =
 
 @mcp.tool()
 def consultar_venda_completa(id_list: str, vendas_com_dfe: Optional[bool] = None) -> str:
-    """consultarVendaCompleta - GET /INTEGRACAO/VENDA/{idList}"""
+    """
+    **Consulta vendas com detalhamento completo.**
+
+    Esta tool retorna informações detalhadas de vendas específicas, incluindo
+    itens, formas de pagamento, impostos, cliente, funcionário e documentos fiscais.
+    É mais completa que `consultar_venda`, ideal para análises detalhadas.
+
+    **Quando usar:**
+    - Para obter detalhes completos de vendas específicas
+    - Para auditar vendas com todos os dados
+    - Para integrações que precisam de informações completas
+    - Para análise de vendas individuais
+
+    **Diferença entre consultar_venda e consultar_venda_completa:**
+    - `consultar_venda`: Lista vendas com informações resumidas (rápido)
+    - `consultar_venda_completa`: Detalhes completos de vendas específicas (completo)
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha IDs das Vendas:** Use `consultar_venda` para listar vendas.
+    2. **Consulte Detalhes:** Chame `consultar_venda_completa` com IDs.
+
+    **Parâmetros:**
+    - `id_list` (str, obrigatório): Lista de IDs de vendas separados por vírgula.
+      Obter via: `consultar_venda`
+      Exemplo: "123,456,789" ou "123"
+    - `vendas_com_dfe` (bool, opcional): Se True, inclui informações de DFe.
+      DFe = Documento Fiscal Eletrônico (NFe, NFCe, etc.)
+      Exemplo: True
+
+    **Retorno:**
+    Lista de vendas com detalhes completos:
+    - **Dados da Venda:**
+      * Código da venda
+      * Data/hora
+      * Valor total
+      * Desconto
+      * Acréscimo
+      * Situação
+    - **Cliente:**
+      * Código e nome
+      * CPF/CNPJ
+    - **Funcionário:**
+      * Código e nome
+    - **Itens da Venda:**
+      * Produto
+      * Quantidade
+      * Preço unitário
+      * Subtotal
+      * Desconto
+    - **Formas de Pagamento:**
+      * Tipo (dinheiro, cartão, etc.)
+      * Valor
+      * Parcelas
+    - **Impostos:**
+      * ICMS, PIS, COFINS, etc.
+    - **Documento Fiscal (se solicitado):**
+      * Chave NFe/NFCe
+      * Número
+      * Série
+      * XML
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar uma venda específica
+    venda_detalhada = consultar_venda_completa(
+        id_list="12345",
+        vendas_com_dfe=True
+    )
+
+    # Cenário 2: Consultar múltiplas vendas
+    vendas_detalhadas = consultar_venda_completa(
+        id_list="12345,12346,12347"
+    )
+
+    # Cenário 3: Fluxo completo - listar e detalhar
+    # Primeiro, listar vendas do dia
+    vendas_resumo = consultar_venda(
+        data_inicial="2025-01-10",
+        data_final="2025-01-10",
+        empresa_codigo=7
+    )
+    
+    # Pegar IDs das vendas
+    ids = [str(v["codigo"]) for v in vendas_resumo]
+    ids_str = ",".join(ids)
+    
+    # Consultar detalhes completos
+    vendas_completas = consultar_venda_completa(
+        id_list=ids_str,
+        vendas_com_dfe=True
+    )
+    
+    # Analisar detalhes
+    for venda in vendas_completas:
+        print(f"Venda {venda['codigo']}:")
+        print(f"  Cliente: {venda['clienteNome']}")
+        print(f"  Total: R$ {venda['valorTotal']:.2f}")
+        print(f"  Itens: {len(venda['itens'])}")
+        for item in venda['itens']:
+            print(f"    - {item['produtoDescricao']}: {item['quantidade']} x R$ {item['precoUnitario']:.2f}")
+
+    # Cenário 4: Auditar venda com documento fiscal
+    venda = consultar_venda_completa(
+        id_list="12345",
+        vendas_com_dfe=True
+    )[0]
+    
+    if venda.get("nfce"):
+        print(f"NFCe: {venda['nfce']['numero']}")
+        print(f"Chave: {venda['nfce']['chave']}")
+        print(f"XML disponível: {venda['nfce'].get('xml') is not None}")
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_venda` (para obter IDs das vendas)
+
+    **Tools Relacionadas:**
+    - `consultar_venda` - Listar vendas (resumido)
+    - `consultar_abastecimento` - Abastecimentos específicos
+    - `venda_resumo` - Resumo de vendas por período
+
+    **Limitações:**
+    - Máximo de IDs por consulta: 100
+    - Para mais vendas, faça múltiplas consultas
+
+    **Dica de Performance:**
+    Use `consultar_venda` para filtrar e listar vendas, depois use
+    `consultar_venda_completa` apenas para as vendas que realmente precisam
+    de detalhamento completo, evitando sobrecarga.
+    """
     params = {}
     if vendas_com_dfe is not None:
         params["vendasComDfe"] = vendas_com_dfe
@@ -6729,7 +6858,114 @@ def vendas_periodo(cupom_cancelado: bool, ordenacao_por: str, data_inicial: str,
 
 @mcp.tool()
 def relatorio_personalizado(relatorio_codigo: str, cliente: Optional[list] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, caixa: Optional[int] = None, funcionario: Optional[list] = None, grupo_produto: Optional[list] = None, administradora: Optional[list] = None, situacao_receber: Optional[str] = None, filial: Optional[list] = None, produto: Optional[list] = None, distribuidora: Optional[str] = None, modelo_documento_fiscal: Optional[list] = None, plano_conta: Optional[int] = None, intermediador: Optional[list] = None, data_posicao: Optional[str] = None, nota: Optional[str] = None, situacao_trr: Optional[list] = None, sub_grupo_produto: Optional[list] = None, estoque: Optional[list] = None, centro_custo: Optional[list] = None, fidelidade: Optional[int] = None, tipo_premiacao: Optional[str] = None, situacao_caixa: Optional[str] = None, filial_origem: Optional[int] = None, tipo_reajuste: Optional[list] = None, saldo_inicial: Optional[float] = None, placa: Optional[str] = None, cupom: Optional[str] = None, fornecedor: Optional[list] = None, titulo: Optional[str] = None, remessa: Optional[str] = None, conta: Optional[list] = None, grupo_cliente: Optional[list] = None, motorista: Optional[list] = None, veiculo: Optional[list] = None, prazo: Optional[list] = None, centro_custo_cliente: Optional[list] = None, cfop: Optional[list] = None, tipo_filtro: Optional[str] = None, tipo_operacao: Optional[str] = None, valor1_comparador: Optional[float] = None, valor2_comparador: Optional[float] = None) -> str:
-    """relatorioPersonalizado - GET /INTEGRACAO/RELATORIO/RELATORIO_PERSONALIZADO/{relatorioCodigo}"""
+    """
+    **Executa relatório personalizado configurado no sistema.**
+
+    Esta tool permite executar relatórios personalizados previamente configurados
+    no webPosto, aplicando filtros dinâmicos. É ideal para relatórios complexos
+    e customizados por cliente.
+
+    **Quando usar:**
+    - Para executar relatórios customizados do sistema
+    - Para gerar relatórios específicos do negócio
+    - Para integrações com BI e dashboards
+    - Para relatórios gerenciais personalizados
+
+    **Conceito:**
+    No webPosto, usuários podem criar relatórios personalizados via interface,
+    definindo campos, filtros, agrupamentos e fórmulas. Esta tool executa esses
+    relatórios via API, permitindo automação e integração.
+
+    **Fluxo de Uso Essencial:**
+    1. **Identifique o Relatório:** Obtenha o código do relatório no webPosto.
+    2. **Prepare os Filtros:** Monte parâmetros conforme o relatório.
+    3. **Execute:** Chame `relatorio_personalizado` com código e filtros.
+
+    **Parâmetros:**
+    - `relatorio_codigo` (str, obrigatório): Código do relatório personalizado.
+      Obter via: Interface do webPosto ou documentação do cliente
+      Exemplo: "REL-VENDAS-001"
+    - **Filtros Dinâmicos (opcionais):** Varia conforme o relatório.
+      Filtros comuns:
+      * `data_inicial` (str): Data inicial (YYYY-MM-DD)
+      * `data_final` (str): Data final (YYYY-MM-DD)
+      * `filial` (List[int]): Lista de filiais
+      * `cliente` (List[int]): Lista de clientes
+      * `funcionario` (List[int]): Lista de funcionários
+      * `produto` (List[int]): Lista de produtos
+      * `grupo_produto` (List[int]): Lista de grupos
+      * `fornecedor` (List[int]): Lista de fornecedores
+      * `conta` (List[int]): Lista de contas bancárias
+      * `centro_custo` (List[int]): Lista de centros de custo
+      * `placa` (str): Placa de veículo
+      * `nota` (str): Número de nota fiscal
+
+    **Retorno:**
+    Estrutura varia conforme o relatório configurado. Geralmente contém:
+    - Colunas definidas no relatório
+    - Dados filtrados e agrupados
+    - Totalizadores (se configurados)
+    - Gráficos (se configurados)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Executar relatório de vendas por cliente
+    relatorio = relatorio_personalizado(
+        relatorio_codigo="REL-VENDAS-CLIENTE",
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        filial=[7]
+    )
+
+    # Cenário 2: Relatório de estoque por grupo
+    relatorio = relatorio_personalizado(
+        relatorio_codigo="REL-ESTOQUE-GRUPO",
+        data_posicao="2025-01-10",
+        filial=[7],
+        grupo_produto=[1, 2, 3]
+    )
+
+    # Cenário 3: Relatório financeiro personalizado
+    relatorio = relatorio_personalizado(
+        relatorio_codigo="REL-FIN-CONTAS-PAGAR",
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        fornecedor=[456, 789],
+        situacao_receber="PENDENTE"
+    )
+
+    # Cenário 4: Relatório de frota
+    relatorio = relatorio_personalizado(
+        relatorio_codigo="REL-FROTA-CONSUMO",
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        cliente=[123],  # Cliente de frota
+        placa="ABC1234"
+    )
+    ```
+
+    **Dependências:**
+    - Requer: Relatório personalizado configurado no webPosto
+
+    **Tools Relacionadas:**
+    - `consultar_venda` - Consultar vendas (genérico)
+    - `vendas_periodo` - Relatório de vendas por período
+    - `produtividade_funcionario` - Relatório de produtividade
+
+    **Limitações:**
+    - Relatório deve estar previamente configurado no webPosto
+    - Filtros disponíveis dependem da configuração do relatório
+    - Estrutura de retorno varia conforme configuração
+
+    **Dica:**
+    Para descobrir quais filtros um relatório aceita, consulte a documentação
+    do relatório no webPosto ou teste com filtros comuns (data, filial, etc.).
+
+    **Nota Importante:**
+    Esta tool é altamente flexível mas requer conhecimento prévio dos
+    relatórios configurados no sistema. Trabalhe com o cliente para identificar
+    os códigos e filtros dos relatórios disponíveis.
+    """
     params = {}
     if cliente is not None:
         params["cliente"] = cliente
@@ -6823,7 +7059,155 @@ def relatorio_personalizado(relatorio_codigo: str, cliente: Optional[list] = Non
 
 @mcp.tool()
 def produtividade_funcionario(tipo_relatorio: str, tipo_data: Optional[str] = None, funcionario: Optional[int] = None, produto: Optional[int] = None, caixa: Optional[list] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, ordenacao: Optional[str] = None, referencia_funcionario: Optional[str] = None, grupo_produto: Optional[list] = None, sub_grupo_produto: Optional[list] = None, pdv: Optional[list] = None, funcoes: Optional[list] = None, tipo_filtro: Optional[str] = None, intervalo_filtro: Optional[str] = None, valor_inicial_filtro: Optional[float] = None, valor_final_filtro: Optional[float] = None, calculo_ticket_medio: Optional[str] = None, agrupamento: Optional[str] = None, filial: Optional[list] = None, comissao: Optional[str] = None, detalha_totalizador_por_grupo: Optional[bool] = None, cliente: Optional[list] = None, grupo_cliente: Optional[list] = None) -> str:
-    """produtividadeFuncionario - GET /INTEGRACAO/RELATORIO/PRODUTIVIDADE_FUNCIONARIO"""
+    """
+    **Gera relatório de produtividade de funcionários.**
+
+    Esta tool retorna métricas de desempenho e produtividade de funcionários,
+    incluindo vendas, ticket médio, comissões e metas. É essencial para
+    gestão de equipe e avaliação de desempenho.
+
+    **Quando usar:**
+    - Para avaliar desempenho de funcionários
+    - Para calcular comissões
+    - Para acompanhamento de metas
+    - Para relatórios gerenciais de RH
+    - Para análise de produtividade
+
+    **Tipos de Relatório:**
+    - **SINTETICO**: Resumo por funcionário (totais)
+    - **ANALITICO**: Detalhado com vendas individuais
+    - **COMISSAO**: Foco em comissões e bonificações
+
+    **Fluxo de Uso Essencial:**
+    1. **Defina o Tipo:** Escolha tipo de relatório (sintético/analítico).
+    2. **Configure Filtros:** Defina período, funcionários, filiais.
+    3. **Execute:** Chame `produtividade_funcionario`.
+
+    **Parâmetros Principais:**
+    - `tipo_relatorio` (str, obrigatório): Tipo do relatório.
+      Valores: "SINTETICO", "ANALITICO", "COMISSAO"
+    - `data_inicial` (str, opcional): Data inicial (YYYY-MM-DD).
+      Exemplo: "2025-01-01"
+    - `data_final` (str, opcional): Data final (YYYY-MM-DD).
+      Exemplo: "2025-01-31"
+    - `tipo_data` (str, opcional): Tipo de data para filtro.
+      Valores: "VENDA", "PAGAMENTO"
+      Default: "VENDA"
+    - `funcionario` (int, opcional): Funcionário específico.
+      Obter via: `consultar_funcionario`
+    - `filial` (List[int], opcional): Lista de filiais.
+      Obter via: `consultar_empresa`
+    - `produto` (int, opcional): Produto específico.
+    - `grupo_produto` (List[int], opcional): Grupos de produtos.
+    - `caixa` (List[int], opcional): Lista de caixas/PDVs.
+    - `ordenacao` (str, opcional): Campo de ordenação.
+      Valores: "NOME", "VALOR", "QUANTIDADE"
+    - `comissao` (str, opcional): Filtro de comissão.
+      Valores: "COM_COMISSAO", "SEM_COMISSAO", "TODOS"
+    - `calculo_ticket_medio` (str, opcional): Método de cálculo.
+      Valores: "VALOR_TOTAL", "QUANTIDADE_VENDAS"
+
+    **Retorno:**
+    Estrutura varia conforme tipo de relatório:
+    - **Sintético:**
+      * Funcionário (código e nome)
+      * Total de vendas (valor)
+      * Quantidade de vendas
+      * Ticket médio
+      * Comissão total
+      * Meta (se configurada)
+      * % da meta atingida
+    - **Analítico:**
+      * Todas as informações do sintético
+      * Detalhamento por venda
+      * Produtos vendidos
+      * Formas de pagamento
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Produtividade mensal de todos os funcionários
+    relatorio = produtividade_funcionario(
+        tipo_relatorio="SINTETICO",
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        filial=[7],
+        ordenacao="VALOR"
+    )
+
+    # Cenário 2: Detalhamento de funcionário específico
+    relatorio = produtividade_funcionario(
+        tipo_relatorio="ANALITICO",
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        funcionario=10,
+        filial=[7]
+    )
+
+    # Cenário 3: Relatório de comissões
+    relatorio = produtividade_funcionario(
+        tipo_relatorio="COMISSAO",
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        filial=[7],
+        comissao="COM_COMISSAO"
+    )
+
+    # Cenário 4: Ranking de vendedores
+    relatorio = produtividade_funcionario(
+        tipo_relatorio="SINTETICO",
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        filial=[7],
+        ordenacao="VALOR"
+    )
+    
+    # Ordenar por valor decrescente
+    ranking = sorted(
+        relatorio,
+        key=lambda x: x["valorTotal"],
+        reverse=True
+    )
+    
+    print("Ranking de Vendedores:")
+    for i, func in enumerate(ranking[:10], 1):
+        print(f"{i}. {func['nome']}: R$ {func['valorTotal']:,.2f}")
+
+    # Cenário 5: Análise de ticket médio
+    relatorio = produtividade_funcionario(
+        tipo_relatorio="SINTETICO",
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        filial=[7],
+        calculo_ticket_medio="VALOR_TOTAL"
+    )
+    
+    for func in relatorio:
+        ticket = func["valorTotal"] / func["quantidadeVendas"] if func["quantidadeVendas"] > 0 else 0
+        print(f"{func['nome']}: Ticket Médio R$ {ticket:.2f}")
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_funcionario` (para obter funcionario)
+    - Opcional: `consultar_empresa` (para obter filial)
+    - Opcional: `consultar_produto` (para obter produto)
+
+    **Tools Relacionadas:**
+    - `consultar_funcionario` - Consultar funcionários
+    - `consultar_venda` - Consultar vendas
+    - `vendas_periodo` - Relatório de vendas
+
+    **Métricas Calculadas:**
+    - **Ticket Médio**: Valor total / Quantidade de vendas
+    - **Comissão**: Baseada em regras configuradas
+    - **% Meta**: (Valor vendido / Meta) * 100
+
+    **Dica de Gestão:**
+    Use este relatório mensalmente para:
+    - Avaliar desempenho individual e da equipe
+    - Identificar top performers
+    - Calcular comissões e bonificações
+    - Ajustar metas e estratégias de vendas
+    """
     params = {}
     if tipo_relatorio is not None:
         params["tipoRelatorio"] = tipo_relatorio
