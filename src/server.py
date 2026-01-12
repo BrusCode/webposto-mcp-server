@@ -3594,7 +3594,35 @@ def relatorio_pernonalizado(ultimo_codigo: Optional[int] = None, limite: Optiona
 
 @mcp.tool()
 def consultar_produto_meta(grupo_meta_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarProdutoMeta - GET /INTEGRACAO/PRODUTO_META"""
+        """
+    **Consulta metas de vendas configuradas por produto.**
+    
+    Permite acompanhar o desempenho de vendas em relação às metas estabelecidas para cada produto.
+    Essencial para gestão comercial e avaliação de performance de vendas.
+    
+    **Quando usar:**
+    - Acompanhar cumprimento de metas de vendas por produto
+    - Análise de performance vs objetivos comerciais
+    - Identificar produtos abaixo/acima da meta
+    - Relatórios gerenciais de vendas
+    
+    **Parâmetros:**
+    - `grupo_meta_codigo` (int, opcional): Filtrar por grupo de meta específico
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação de resultados
+    
+    **Exemplo de Uso:**
+    ```python
+    # Consultar metas de produtos
+    metas = consultar_produto_meta(limite=100)
+    
+    # Analisar cumprimento
+    for meta in metas:
+        perc = (meta["vendido"] / meta["meta"]) * 100
+        print(f"{meta['produto']}: {perc:.1f}% da meta")
+    ```
+    
+    **Tools Relacionadas:** `consultar_produto`, `vendas_periodo`, `consultar_funcionario_meta`
+    """
     params = {}
     if grupo_meta_codigo is not None:
         params["grupoMetaCodigo"] = grupo_meta_codigo
@@ -3610,7 +3638,35 @@ def consultar_produto_meta(grupo_meta_codigo: Optional[int] = None, ultimo_codig
 
 @mcp.tool()
 def consultar_produto_lmc_lmp(codigo_produt_lmc: Optional[int] = None) -> str:
-    """consultarProdutoLmcLmp - GET /INTEGRACAO/PRODUTO_LMC_LMP"""
+        """
+    **Consulta Lucro Médio por Cliente (LMC) e Lucro Médio por Produto (LMP).**
+    
+    Fornece análise de rentabilidade detalhada por produto, essencial para precificação
+    estratégica e identificação dos produtos mais lucrativos do negócio.
+    
+    **Quando usar:**
+    - Análise de rentabilidade por produto
+    - Precificação estratégica baseada em margem
+    - Identificar produtos mais/menos lucrativos
+    - Otimização do mix de produtos
+    
+    **Parâmetros:**
+    - `produto_codigo` (int, opcional): Filtrar por produto específico
+    - `data_inicial`, `data_final` (str, opcional): Período de análise
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação de resultados
+    
+    **Exemplo de Uso:**
+    ```python
+    # Identificar produtos mais lucrativos
+    lmc_lmp = consultar_produto_lmc_lmp(limite=100)
+    
+    top_lucrativos = sorted(lmc_lmp, key=lambda x: x["lmp"], reverse=True)[:10]
+    for prod in top_lucrativos:
+        print(f"{prod['produto']}: LMP R$ {prod['lmp']:.2f} | LMC R$ {prod['lmc']:.2f}")
+    ```
+    
+    **Tools Relacionadas:** `consultar_produto`, `consultar_dre`, `vendas_periodo`
+    """
     params = {}
     if codigo_produt_lmc is not None:
         params["codigoProdutLmc"] = codigo_produt_lmc
@@ -4817,7 +4873,34 @@ def consultar_icms(ultimo_codigo: Optional[int] = None, limite: Optional[int] = 
 
 @mcp.tool()
 def consultar_grupo_meta(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarGrupoMeta - GET /INTEGRACAO/GRUPO_META"""
+        """
+    **Consulta metas configuradas por grupo de produtos.**
+    
+    Permite análise de performance por categoria de produtos, facilitando a gestão do mix
+    comercial e identificação de grupos estratégicos para o negócio.
+    
+    **Quando usar:**
+    - Análise de performance por categoria de produtos
+    - Gestão estratégica do mix de produtos
+    - Comparar desempenho entre grupos
+    - Identificar categorias com baixo desempenho
+    
+    **Parâmetros:**
+    - `grupo_meta_codigo` (int, opcional): Filtrar por grupo específico
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação de resultados
+    
+    **Exemplo de Uso:**
+    ```python
+    # Comparar performance entre grupos
+    metas = consultar_grupo_meta(limite=20)
+    
+    for grupo in metas:
+        perc = (grupo["vendido"] / grupo["meta"]) * 100
+        print(f"{grupo['nome']}: {perc:.1f}% - R$ {grupo['vendido']:,.2f}")
+    ```
+    
+    **Tools Relacionadas:** `consultar_grupo`, `consultar_produto_meta`, `consultar_sub_grupo_rede`
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
@@ -4861,7 +4944,34 @@ def consultar_funcoes(ultimo_codigo: Optional[int] = None, limite: Optional[int]
 
 @mcp.tool()
 def consultar_funcionario_meta(grupo_meta_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarFuncionarioMeta - GET /INTEGRACAO/FUNCIONARIO_META"""
+        """
+    **Consulta metas de vendas configuradas por funcionário.**
+    
+    Permite acompanhar a performance individual de cada funcionário em relação às suas metas.
+    Fundamental para gestão de comissões e avaliação de desempenho da equipe de vendas.
+    
+    **Quando usar:**
+    - Acompanhar performance individual de vendedores
+    - Calcular comissões baseadas em metas
+    - Avaliar desempenho da equipe comercial
+    - Criar rankings de vendas
+    
+    **Parâmetros:**
+    - `funcionario_meta_codigo` (int, opcional): Filtrar por funcionário específico
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação de resultados
+    
+    **Exemplo de Uso:**
+    ```python
+    # Ranking de funcionários por cumprimento de meta
+    metas = consultar_funcionario_meta(limite=50)
+    
+    ranking = sorted(metas, key=lambda x: x["percentual_meta"], reverse=True)
+    for i, func in enumerate(ranking[:10], 1):
+        print(f"{i}. {func['nome']}: {func['percentual_meta']:.1f}%")
+    ```
+    
+    **Tools Relacionadas:** `consultar_funcionario`, `produtividade_funcionario`, `consultar_produto_meta`
+    """
     params = {}
     if grupo_meta_codigo is not None:
         params["grupoMetaCodigo"] = grupo_meta_codigo
@@ -6162,7 +6272,39 @@ def consultar_sub_grupo_rede_1() -> str:
 
 @mcp.tool()
 def consultar_preco_idenfitid() -> str:
-    """consultarPrecoIdenfitid - GET /INTEGRACAO/CONSULTAR_PRECO_IDENTIFID"""
+        """
+    **Consulta histórico de alterações de preços (preços identificados).**
+    
+    Fornece auditoria completa de todas as alterações de preço realizadas no sistema,
+    permitindo análise de elasticidade e rastreamento de reajustes.
+    
+    **Quando usar:**
+    - Auditoria de alterações de preços
+    - Análise de elasticidade de demanda
+    - Histórico de reajustes de preços
+    - Compliance e rastreabilidade
+    
+    **Parâmetros:**
+    - `produto_codigo` (int, opcional): Filtrar por produto específico
+    - `data_inicial`, `data_final` (str, opcional): Período de análise
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação de resultados
+    
+    **Exemplo de Uso:**
+    ```python
+    # Analisar histórico de preços de um produto
+    historico = consultar_preco_idenfitid(
+        produto_codigo=123,
+        data_inicial="2025-01-01",
+        limite=50
+    )
+    
+    for registro in historico:
+        variacao = ((registro['preco_novo'] - registro['preco_anterior']) / registro['preco_anterior']) * 100
+        print(f"{registro['data']}: R$ {registro['preco_anterior']:.2f} → R$ {registro['preco_novo']:.2f} ({variacao:+.1f}%)")
+    ```
+    
+    **Tools Relacionadas:** `consultar_produto`, `alterar_preco_combustivel`, `reajustar_produto`
+    """
     params = {}
 
     result = client.get("/INTEGRACAO/CONSULTAR_PRECO_IDENTIFID", params=params)
