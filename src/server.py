@@ -1203,7 +1203,130 @@ def consultar_revendedores() -> str:
 
 @mcp.tool()
 def reajustar_produto(dados: Dict[str, Any]) -> str:
-    """reajustarProduto - POST /INTEGRACAO/REAJUSTAR_PRODUTO"""
+    """
+    **Reajusta preços de produtos em uma unidade.**
+
+    Esta tool permite alterar preços de venda de produtos em uma unidade específica,
+    aplicando reajustes percentuais ou valores fixos. É essencial para gestão de
+    preços e competição de mercado.
+
+    **Quando usar:**
+    - Para reajustar preços de produtos
+    - Para aplicar reajustes percentuais em massa
+    - Para atualizar preços após mudanças de custo
+    - Para sincronização de preços com sistemas externos
+
+    **Arquitetura Multi-Tenant:**
+    Preços são configurados por unidade (empresa). Cada filial pode ter preços
+    diferentes para os mesmos produtos. O reajuste afeta apenas a unidade
+    especificada.
+
+    **Tipos de Reajuste:**
+    - **Percentual**: Aumenta/diminui preço por percentual (ex: +5%)
+    - **Valor Fixo**: Define preço específico
+    - **Margem**: Calcula preço baseado em margem sobre custo
+
+    **Fluxo de Uso Essencial:**
+    1. **Identifique os Produtos:** Use `consultar_produto` para obter códigos.
+    2. **Prepare os Dados:** Monte objeto com produtos e reajustes.
+    3. **Aplique o Reajuste:** Chame `reajustar_produto`.
+
+    **Parâmetros (via objeto `dados`):**
+    - `empresaCodigo` (int, obrigatório): Código da empresa/filial.
+      Obter via: `consultar_empresa`
+    - `produtos` (List[Dict], obrigatório): Lista de produtos a reajustar.
+      Cada produto deve conter:
+      * `produtoCodigo` (int, obrigatório): Código do produto
+      * `precoVenda` (float, opcional): Novo preço de venda fixo
+      * `percentualReajuste` (float, opcional): Percentual de reajuste
+        Exemplo: 5.0 (aumenta 5%), -10.0 (diminui 10%)
+      * `margemLucro` (float, opcional): Margem de lucro sobre custo
+        Exemplo: 30.0 (30% de margem)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Reajustar preço de produto específico
+    reajustar_produto(
+        dados={
+            "empresaCodigo": 7,
+            "produtos": [
+                {
+                    "produtoCodigo": 123,
+                    "precoVenda": 5.99
+                }
+            ]
+        }
+    )
+
+    # Cenário 2: Aplicar reajuste percentual em vários produtos
+    reajustar_produto(
+        dados={
+            "empresaCodigo": 7,
+            "produtos": [
+                {"produtoCodigo": 123, "percentualReajuste": 5.0},   # +5%
+                {"produtoCodigo": 456, "percentualReajuste": 5.0},   # +5%
+                {"produtoCodigo": 789, "percentualReajuste": 5.0}    # +5%
+            ]
+        }
+    )
+
+    # Cenário 3: Reajustar por margem de lucro
+    reajustar_produto(
+        dados={
+            "empresaCodigo": 7,
+            "produtos": [
+                {
+                    "produtoCodigo": 123,
+                    "margemLucro": 30.0  # 30% sobre o custo
+                }
+            ]
+        }
+    )
+
+    # Cenário 4: Reajuste em massa de categoria
+    # Primeiro, buscar produtos da categoria
+    produtos_categoria = consultar_produto(
+        grupo_codigo=5,  # Grupo de lubrificantes
+        empresa_codigo=7,
+        limite=100
+    )
+    
+    # Aplicar reajuste de 10% em todos
+    produtos_reajuste = [
+        {"produtoCodigo": p["codigo"], "percentualReajuste": 10.0}
+        for p in produtos_categoria
+    ]
+    
+    reajustar_produto(
+        dados={
+            "empresaCodigo": 7,
+            "produtos": produtos_reajuste
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_empresa` (para obter empresaCodigo)
+    - Requer: `consultar_produto` (para obter produtoCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_produto` - Consultar produtos e preços atuais
+    - `alterar_produto` - Alterar dados cadastrais do produto
+    - `alterar_preco_combustivel` - Reajustar preços de combustíveis
+
+    **Diferença entre reajustar_produto e alterar_preco_combustivel:**
+    - `reajustar_produto`: Genérico, para todos os tipos de produtos
+    - `alterar_preco_combustivel`: Específico para combustíveis, com regras ANP
+
+    **Validações:**
+    - Produtos devem existir e estar ativos na unidade
+    - Preços devem ser maiores que zero
+    - Apenas um tipo de reajuste por produto (preço fixo OU percentual OU margem)
+
+    **Dica:**
+    Para reajustes em massa, consulte os produtos primeiro, aplique a lógica
+    de reajuste e envie todos de uma vez para otimizar a operação.
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/REAJUSTAR_PRODUTO", data=dados, params=params)
@@ -1274,7 +1397,134 @@ def produto_inventario(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def incluir_produto_comissao(dados: Dict[str, Any]) -> str:
-    """incluirProdutoComissao - POST /INTEGRACAO/PRODUTO_COMISSAO"""
+    """
+    **Configura comissão de produto para funcionários.**
+
+    Esta tool permite configurar regras de comissão para produtos específicos,
+    definindo percentuais ou valores fixos que funcionários receberão ao vender
+    determinados produtos. É essencial para gestão de comissões.
+
+    **Quando usar:**
+    - Para configurar comissões de produtos
+    - Para definir incentivos de vendas
+    - Para campanhas de produtos específicos
+    - Para gestão de metas e bonificações
+
+    **Tipos de Comissão:**
+    - **Percentual**: Percentual sobre o valor da venda
+    - **Valor Fixo**: Valor fixo por unidade vendida
+    - **Por Funcionário**: Comissão específica para funcionário
+    - **Geral**: Comissão padrão para todos
+
+    **Fluxo de Uso Essencial:**
+    1. **Identifique o Produto:** Use `consultar_produto` para obter o código.
+    2. **Prepare os Dados:** Monte objeto com regras de comissão.
+    3. **Configure:** Chame `incluir_produto_comissao`.
+
+    **Parâmetros (via objeto `dados`):**
+    - `produtoCodigo` (int, obrigatório): Código do produto.
+      Obter via: `consultar_produto`
+    - `empresaCodigo` (int, obrigatório): Código da empresa/filial.
+      Obter via: `consultar_empresa`
+    - `tipoComissao` (str, obrigatório): Tipo de comissão.
+      Valores: "PERCENTUAL", "VALOR_FIXO"
+    - `valorComissao` (float, obrigatório): Valor da comissão.
+      Se percentual: 5.0 (5%)
+      Se fixo: 0.50 (R$ 0,50 por unidade)
+    - `funcionarioCodigo` (int, opcional): Funcionário específico.
+      Obter via: `consultar_funcionario`
+      Se omitido, vale para todos os funcionários.
+    - `dataInicio` (str, opcional): Data de início da vigência (YYYY-MM-DD).
+    - `dataFim` (str, opcional): Data de fim da vigência (YYYY-MM-DD).
+    - `observacao` (str, opcional): Observações sobre a comissão.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Comissão percentual para todos
+    incluir_produto_comissao(
+        dados={
+            "produtoCodigo": 123,
+            "empresaCodigo": 7,
+            "tipoComissao": "PERCENTUAL",
+            "valorComissao": 5.0,  # 5% sobre a venda
+            "observacao": "Comissão padrão de lubrificantes"
+        }
+    )
+
+    # Cenário 2: Comissão fixa por unidade
+    incluir_produto_comissao(
+        dados={
+            "produtoCodigo": 456,
+            "empresaCodigo": 7,
+            "tipoComissao": "VALOR_FIXO",
+            "valorComissao": 0.50,  # R$ 0,50 por unidade
+            "observacao": "Incentivo de venda de aditivos"
+        }
+    )
+
+    # Cenário 3: Comissão específica para funcionário
+    incluir_produto_comissao(
+        dados={
+            "produtoCodigo": 789,
+            "empresaCodigo": 7,
+            "funcionarioCodigo": 10,  # Funcionário específico
+            "tipoComissao": "PERCENTUAL",
+            "valorComissao": 10.0,  # 10% (comissão especial)
+            "observacao": "Comissão especial para vendedor destaque"
+        }
+    )
+
+    # Cenário 4: Campanha com período definido
+    incluir_produto_comissao(
+        dados={
+            "produtoCodigo": 123,
+            "empresaCodigo": 7,
+            "tipoComissao": "PERCENTUAL",
+            "valorComissao": 15.0,  # 15% durante campanha
+            "dataInicio": "2025-01-10",
+            "dataFim": "2025-01-31",
+            "observacao": "Campanha Janeiro - Lubrificantes"
+        }
+    )
+
+    # Cenário 5: Configurar comissões em massa
+    # Produtos de uma categoria
+    produtos = consultar_produto(
+        grupo_codigo=5,  # Lubrificantes
+        empresa_codigo=7
+    )
+    
+    for produto in produtos:
+        incluir_produto_comissao(
+            dados={
+                "produtoCodigo": produto["codigo"],
+                "empresaCodigo": 7,
+                "tipoComissao": "PERCENTUAL",
+                "valorComissao": 5.0,
+                "observacao": "Comissão padrão categoria"
+            }
+        )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_produto` (para obter produtoCodigo)
+    - Requer: `consultar_empresa` (para obter empresaCodigo)
+    - Opcional: `consultar_funcionario` (para obter funcionarioCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_produto` - Consultar produtos
+    - `consultar_funcionario` - Consultar funcionários
+    - `consultar_venda` - Consultar vendas com comissões
+
+    **Regras de Aplicação:**
+    - Comissões específicas de funcionário têm prioridade sobre gerais
+    - Comissões com período definido são aplicadas apenas na vigência
+    - Produtos sem comissão configurada não geram comissão
+
+    **Dica:**
+    Use períodos definidos (`dataInicio` e `dataFim`) para campanhas temporárias,
+    facilitando a gestão e evitando comissões indevidas após o período.
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/PRODUTO_COMISSAO", data=dados, params=params)
@@ -2068,8 +2318,122 @@ def autorizar_nfe(nota_codigo: str) -> str:
 
 
 @mcp.tool()
-def alterar_preco_combustivel() -> str:
-    """alterarPrecoCombustivel - POST /INTEGRACAO/ALTERACAO_PRECO_COMBUSTIVEL"""
+def alterar_preco_combustivel(dados: Dict[str, Any]) -> str:
+    """
+    **Altera preços de combustíveis com regras ANP.**
+
+    Esta tool permite alterar preços de combustíveis (gasolina, diesel, etanol, GNV)
+    seguindo as regras da ANP e gerando registros de alteração de preços.
+    É específica para postos de combustíveis.
+
+    **Quando usar:**
+    - Para alterar preços de combustíveis
+    - Para registrar mudanças de preço conforme ANP
+    - Para sincronizar preços com distribuidoras
+    - Para atualizações automáticas de preços
+
+    **Regras ANP:**
+    O webPosto registra todas as alterações de preço de combustíveis para
+    atender às exigências da ANP (Agência Nacional do Petróleo), mantendo
+    histórico completo de preços.
+
+    **Fluxo de Uso Essencial:**
+    1. **Identifique os Combustíveis:** Use `consultar_produto_combustivel`.
+    2. **Prepare os Dados:** Monte objeto com novos preços.
+    3. **Aplique a Alteração:** Chame `alterar_preco_combustivel`.
+
+    **Parâmetros (via objeto `dados`):**
+    - `empresaCodigo` (int, obrigatório): Código da empresa/filial.
+      Obter via: `consultar_empresa`
+    - `dataHoraAlteracao` (str, obrigatório): Data/hora da alteração.
+      Formato: "YYYY-MM-DD HH:MM:SS"
+      Exemplo: "2025-01-10 08:00:00"
+    - `produtos` (List[Dict], obrigatório): Lista de combustíveis a alterar.
+      Cada produto deve conter:
+      * `produtoCodigo` (int, obrigatório): Código do combustível
+      * `precoVenda` (float, obrigatório): Novo preço de venda
+    - `observacao` (str, opcional): Motivo da alteração.
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Alterar preço de gasolina comum
+    alterar_preco_combustivel(
+        dados={
+            "empresaCodigo": 7,
+            "dataHoraAlteracao": "2025-01-10 08:00:00",
+            "produtos": [
+                {
+                    "produtoCodigo": 1,  # Gasolina Comum
+                    "precoVenda": 5.99
+                }
+            ],
+            "observacao": "Reajuste conforme distribuidora"
+        }
+    )
+
+    # Cenário 2: Alterar preços de múltiplos combustíveis
+    import datetime
+    agora = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    alterar_preco_combustivel(
+        dados={
+            "empresaCodigo": 7,
+            "dataHoraAlteracao": agora,
+            "produtos": [
+                {"produtoCodigo": 1, "precoVenda": 5.99},  # Gasolina Comum
+                {"produtoCodigo": 2, "precoVenda": 6.29},  # Gasolina Aditivada
+                {"produtoCodigo": 3, "precoVenda": 6.19},  # Etanol
+                {"produtoCodigo": 4, "precoVenda": 5.89}   # Diesel S10
+            ],
+            "observacao": "Reajuste semanal - Janeiro 2025"
+        }
+    )
+
+    # Cenário 3: Integração com sistema de preços
+    # Buscar combustíveis
+    combustiveis = consultar_produto_combustivel(empresa_codigo=7)
+    
+    # Aplicar reajuste de 3% em todos
+    produtos_reajuste = [
+        {
+            "produtoCodigo": c["codigo"],
+            "precoVenda": c["precoVenda"] * 1.03  # +3%
+        }
+        for c in combustiveis
+    ]
+    
+    alterar_preco_combustivel(
+        dados={
+            "empresaCodigo": 7,
+            "dataHoraAlteracao": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "produtos": produtos_reajuste,
+            "observacao": "Reajuste automático de 3%"
+        }
+    )
+    ```
+
+    **Dependências:**
+    - Requer: `consultar_empresa` (para obter empresaCodigo)
+    - Requer: `consultar_produto_combustivel` (para obter produtoCodigo)
+
+    **Tools Relacionadas:**
+    - `consultar_produto_combustivel` - Consultar combustíveis
+    - `reajustar_produto` - Reajustar produtos genéricos
+    - `consultar_produto` - Consultar produtos
+
+    **Diferença entre alterar_preco_combustivel e reajustar_produto:**
+    - `alterar_preco_combustivel`: Específico para combustíveis, com regras ANP
+    - `reajustar_produto`: Genérico, para todos os tipos de produtos
+
+    **Validações:**
+    - Produtos devem ser combustíveis
+    - Preços devem ser maiores que zero
+    - Data/hora não pode ser futura
+
+    **Nota Importante:**
+    Esta tool gera registro de alteração de preço para atender às exigências
+    da ANP. Use sempre que alterar preços de combustíveis.
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/ALTERACAO_PRECO_COMBUSTIVEL", data=dados, params=params)
@@ -4202,7 +4566,121 @@ def estoque_periodo(data_final: str, empresa_codigo: Optional[int] = None, data_
 
 @mcp.tool()
 def estoque(empresa_codigo: Optional[int] = None, data_hora_atualizacao: Optional[str] = None, estoque_codigo: Optional[int] = None, estoque_codigo_externo: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """estoque - GET /INTEGRACAO/ESTOQUE"""
+    """
+    **Consulta estoque de produtos por unidade.**
+
+    Esta tool retorna as quantidades em estoque de produtos em cada unidade/empresa,
+    incluindo estoque atual, mínimo, máximo e movimentações. É essencial para
+    gestão de estoque e controle de inventário.
+
+    **Quando usar:**
+    - Para consultar estoque atual de produtos
+    - Para verificar níveis de estoque mínimo/máximo
+    - Para relatórios de inventário
+    - Para integrações com sistemas externos
+    - Para planejamento de compras
+
+    **Arquitetura Multi-Tenant:**
+    Estoque é controlado por unidade (empresa). Cada filial tem seu próprio
+    estoque independente. Use `empresa_codigo` para filtrar estoque de uma
+    unidade específica.
+
+    **Tipos de Estoque:**
+    - **Estoque Atual**: Quantidade disponível no momento
+    - **Estoque Mínimo**: Nível mínimo configurado (alerta de reposição)
+    - **Estoque Máximo**: Nível máximo configurado
+    - **Estoque Reservado**: Quantidade reservada para vendas/pedidos
+
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha o ID da Empresa (Opcional):** Use `consultar_empresa` para filtrar.
+    2. **Execute a Consulta:** Chame `estoque` com filtros desejados.
+
+    **Parâmetros:**
+    - `empresa_codigo` (int, opcional): Código da empresa/filial.
+      Obter via: `consultar_empresa`
+      Exemplo: 7
+    - `estoque_codigo` (int, opcional): Código específico do registro de estoque.
+      Exemplo: 123
+    - `estoque_codigo_externo` (str, opcional): Código externo (integração).
+      Exemplo: "EST-EXT-001"
+    - `data_hora_atualizacao` (str, opcional): Retorna estoques atualizados após data/hora.
+      Formato: "YYYY-MM-DD HH:MM:SS"
+      Exemplo: "2025-01-10 08:00:00"
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+
+    **Retorno:**
+    Lista de estoques contendo:
+    - Código do estoque
+    - Produto (código e descrição)
+    - Empresa/filial
+    - Quantidade atual
+    - Estoque mínimo
+    - Estoque máximo
+    - Estoque reservado
+    - Unidade de medida
+    - Última atualização
+    - Localização (se configurado)
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar estoque de uma unidade
+    estoque_unidade = estoque(
+        empresa_codigo=7,
+        limite=500
+    )
+
+    # Cenário 2: Identificar produtos com estoque baixo
+    estoque_unidade = estoque(empresa_codigo=7, limite=1000)
+    
+    produtos_baixo_estoque = [
+        e for e in estoque_unidade 
+        if e["quantidadeAtual"] <= e["estoqueMinimo"]
+    ]
+    
+    print(f"Produtos com estoque baixo: {len(produtos_baixo_estoque)}")
+    for p in produtos_baixo_estoque:
+        print(f"- {p['produtoDescricao']}: {p['quantidadeAtual']} (mín: {p['estoqueMinimo']})")
+
+    # Cenário 3: Sincronização incremental (estoques atualizados)
+    novos = estoque(
+        empresa_codigo=7,
+        data_hora_atualizacao="2025-01-10 00:00:00",
+        limite=500
+    )
+
+    # Cenário 4: Relatório de valor de estoque
+    estoque_unidade = estoque(empresa_codigo=7, limite=1000)
+    
+    # Buscar preços dos produtos
+    produtos = consultar_produto(empresa_codigo=7, limite=1000)
+    precos = {p["codigo"]: p["precoCusto"] for p in produtos}
+    
+    valor_total = sum(
+        e["quantidadeAtual"] * precos.get(e["produtoCodigo"], 0)
+        for e in estoque_unidade
+    )
+    print(f"Valor total do estoque: R$ {valor_total:,.2f}")
+    ```
+
+    **Dependências:**
+    - Opcional: `consultar_empresa` (para obter empresa_codigo)
+    - Opcional: `consultar_produto` (para obter detalhes dos produtos)
+
+    **Tools Relacionadas:**
+    - `consultar_produto_estoque` - Estoque de produto específico
+    - `produto_inventario` - Registrar inventário/contagem
+    - `consultar_contagem_estoque` - Consultar contagens de estoque
+    - `reajustar_estoque_produto_combustivel` - Ajustar estoque de combustíveis
+
+    **Diferença entre estoque e consultar_produto_estoque:**
+    - `estoque`: Lista todos os estoques de uma unidade (visão geral)
+    - `consultar_produto_estoque`: Estoque de produto específico com histórico
+
+    **Dica:**
+    Use `data_hora_atualizacao` para sincronização incremental com sistemas
+    externos, evitando consultar todo o estoque a cada vez.
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -4568,7 +5046,121 @@ def consultar_conta(empresa_codigo: Optional[int] = None, ultimo_codigo: Optiona
 
 @mcp.tool()
 def consultar_contagem_estoque(data_contagem: str, contagem_referencia: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarContagemEstoque - GET /INTEGRACAO/CONTAGEM_ESTOQUE"""
+    """
+    **Consulta contagens de estoque (inventários).**
+
+    Esta tool retorna registros de contagens de estoque (inventários) realizadas,
+    incluindo produtos contados, quantidades, diferenças e ajustes. É essencial
+    para auditoria e controle de estoque.
+
+    **Quando usar:**
+    - Para consultar inventários realizados
+    - Para auditar contagens de estoque
+    - Para verificar diferenças entre físico e sistema
+    - Para relatórios de inventário
+    - Para conciliação de estoque
+
+    **Processo de Inventário:**
+    1. Contagem física dos produtos
+    2. Registro da contagem via `produto_inventario`
+    3. Sistema calcula diferenças
+    4. Ajustes automáticos de estoque
+    5. Consulta via `consultar_contagem_estoque`
+
+    **Fluxo de Uso Essencial:**
+    1. **Execute a Consulta:** Chame `consultar_contagem_estoque` com data.
+    2. **Analise os Resultados:** Verifique diferenças e ajustes.
+
+    **Parâmetros:**
+    - `data_contagem` (str, obrigatório): Data da contagem no formato YYYY-MM-DD.
+      Exemplo: "2025-01-10"
+    - `contagem_referencia` (int, opcional): Código de referência da contagem.
+      Usado para agrupar contagens do mesmo inventário.
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+
+    **Retorno:**
+    Lista de contagens contendo:
+    - Código da contagem
+    - Produto (código e descrição)
+    - Empresa/filial
+    - Data da contagem
+    - Quantidade contada
+    - Quantidade sistema (antes)
+    - Diferença (contada - sistema)
+    - Tipo de ajuste (entrada/saída)
+    - Usuário responsável
+    - Observações
+
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar contagens de uma data específica
+    contagens = consultar_contagem_estoque(
+        data_contagem="2025-01-10",
+        limite=500
+    )
+
+    # Cenário 2: Analisar diferenças de inventário
+    contagens = consultar_contagem_estoque(
+        data_contagem="2025-01-10",
+        limite=1000
+    )
+    
+    # Produtos com diferenças
+    diferencas = [
+        c for c in contagens 
+        if c["diferenca"] != 0
+    ]
+    
+    print(f"Produtos com diferenças: {len(diferencas)}")
+    for d in diferencas:
+        tipo = "SOBRA" if d["diferenca"] > 0 else "FALTA"
+        print(f"- {d['produtoDescricao']}: {tipo} de {abs(d['diferenca'])} unidades")
+
+    # Cenário 3: Relatório de inventário mensal
+    contagens = consultar_contagem_estoque(
+        data_contagem="2025-01-31",  # Último dia do mês
+        limite=1000
+    )
+    
+    total_contado = sum(c["quantidadeContada"] for c in contagens)
+    total_sistema = sum(c["quantidadeSistema"] for c in contagens)
+    total_diferenca = total_contado - total_sistema
+    
+    print(f"Total contado: {total_contado}")
+    print(f"Total sistema: {total_sistema}")
+    print(f"Diferença: {total_diferenca}")
+
+    # Cenário 4: Consultar inventário específico por referência
+    contagens = consultar_contagem_estoque(
+        data_contagem="2025-01-10",
+        contagem_referencia=123,
+        limite=500
+    )
+    ```
+
+    **Dependências:**
+    - Relacionada: `produto_inventario` (para registrar contagens)
+
+    **Tools Relacionadas:**
+    - `produto_inventario` - Registrar contagem de estoque
+    - `estoque` - Consultar estoque atual
+    - `consultar_produto_estoque` - Estoque de produto específico
+
+    **Tipos de Diferenças:**
+    - **Positiva (Sobra)**: Contagem > Sistema (entrada de ajuste)
+    - **Negativa (Falta)**: Contagem < Sistema (saída de ajuste)
+    - **Zero**: Contagem = Sistema (sem ajuste)
+
+    **Dica de Auditoria:**
+    Diferenças significativas podem indicar:
+    - Erros de lançamento de vendas/compras
+    - Perdas não registradas
+    - Furtos ou desvios
+    - Erros na contagem física
+    
+    Investigue diferenças acima de 5% do estoque.
+    """
     params = {}
     if data_contagem is not None:
         params["dataContagem"] = data_contagem
