@@ -2308,7 +2308,48 @@ def autoriza_pagamento_abastecimento(dados: Dict[str, Any]) -> str:
 
 @mcp.tool()
 def autorizar_nfe(nota_codigo: str) -> str:
-    """autorizarNfe - POST /INTEGRACAO/AUTORIZAR_NFE_SAIDA/{notaCodigo}"""
+    """
+    **Autoriza a emissão de uma Nota Fiscal Eletrônica (NFe) de saída.**
+    
+    Esta tool envia uma NFe para autorização junto à SEFAZ. Após a autorização,
+    a nota fiscal é validada e pode ser transmitida ao destinatário.
+    
+    **Quando usar:**
+    - Para autorizar NFe de vendas
+    - Para emissão de notas fiscais eletrônicas
+    - Para compliance com legislação fiscal
+    - Para integrações com SEFAZ
+    
+    **Fluxo de Autorização:**
+    1. Nota criada no sistema
+    2. Validação de dados
+    3. Envio para SEFAZ
+    4. Aguardar retorno
+    5. Processar autorização ou rejeição
+    
+    **Parâmetros:**
+    - `nota_codigo` (str, obrigatório): Código da nota a ser autorizada.
+    
+    **Exemplo de Uso (Python):**
+    ```python
+    # Autorizar uma NFe
+    resultado = autorizar_nfe(nota_codigo="12345")
+    
+    if resultado["autorizada"]:
+        print(f"NFe autorizada! Chave: {resultado['chave']}")
+    else:
+        print(f"Erro: {resultado['mensagem']}")
+    ```
+    
+    **Tools Relacionadas:**
+    - `consultar_nota_manifestacao` - Consultar manifestações
+    - `consultar_icms` - Configurações tributárias
+    
+    **Observações:**
+    - Operação pode demorar alguns segundos (aguardar resposta da SEFAZ)
+    - Valide todos os dados antes de autorizar
+    - Em caso de rejeição, corrija os erros e tente novamente
+    """
     params = {}
 
     result = client.post("/INTEGRACAO/AUTORIZAR_NFE_SAIDA/{notaCodigo}", data=dados, params=params)
@@ -3436,7 +3477,110 @@ def sangria_caixa(data_inicial: Optional[str] = None, data_final: Optional[str] 
 
 @mcp.tool()
 def relatorio_pernonalizado(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """relatorioPernonalizado - GET /INTEGRACAO/RELATORIO_PERSONALIZADO"""
+    """
+    **Consulta relatórios personalizados configurados no sistema.**
+    
+    Esta tool permite acessar relatórios customizados criados pelos usuários no webPosto,
+    oferecendo flexibilidade para análises específicas de cada negócio. Relatórios
+    personalizados podem combinar dados de múltiplas tabelas e aplicar regras de negócio
+    específicas.
+    
+    **Quando usar:**
+    - Para acessar relatórios customizados criados no sistema
+    - Para análises específicas não cobertas por relatórios padrão
+    - Para dashboards gerenciais personalizados
+    - Para extrair dados com regras de negócio específicas
+    - Para integrações que necessitam de dados em formatos customizados
+    
+    **Arquitetura de Relatórios Personalizados:**
+    No webPosto, relatórios personalizados são criados através de uma interface de
+    configuração que permite ao usuário definir:
+    - Fontes de dados (tabelas e joins)
+    - Filtros e condições
+    - Agrupamentos e totalizações
+    - Formato de saída
+    
+    **Fluxo de Uso Essencial:**
+    1. **Liste os Relatórios:** Chame `relatorio_pernonalizado` sem filtros para ver
+       todos os relatórios disponíveis.
+    2. **Identifique o Relatório:** Analise a lista e identifique o código do relatório
+       desejado.
+    3. **Execute o Relatório:** Chame novamente passando o código específico para obter
+       os dados do relatório.
+    
+    **Parâmetros:**
+    - `ultimo_codigo` (int, opcional): Código do último relatório retornado, para paginação.
+      Exemplo: 150
+    - `limite` (int, opcional): Número máximo de registros a retornar (default: 100, max: 2000).
+      Exemplo: 50
+    
+    **Retorno:**
+    Lista de relatórios personalizados contendo:
+    - Código do relatório
+    - Nome/Descrição
+    - Tipo de relatório
+    - Parâmetros configurados
+    - Dados do relatório (se código específico for fornecido)
+    - Data de criação/atualização
+    - Usuário criador
+    
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Listar todos os relatórios personalizados disponíveis
+    relatorios = relatorio_pernonalizado(limite=100)
+    print("Relatórios disponíveis:", relatorios)
+    
+    # Cenário 2: Acessar relatório específico
+    # Supondo que o código do relatório "Vendas por Região" seja 42
+    dados_relatorio = relatorio_pernonalizado(ultimo_codigo=42, limite=1)
+    print("Dados do relatório:", dados_relatorio)
+    
+    # Cenário 3: Paginação de relatórios (listar próximos 50)
+    proximos = relatorio_pernonalizado(ultimo_codigo=100, limite=50)
+    
+    # Cenário 4: Integração com dashboard
+    # Buscar múltiplos relatórios para compor um dashboard
+    dashboard_data = {}
+    relatorios_ids = [10, 25, 42, 58]  # IDs dos relatórios do dashboard
+    
+    for rel_id in relatorios_ids:
+        dados = relatorio_pernonalizado(ultimo_codigo=rel_id, limite=1)
+        dashboard_data[f"relatorio_{rel_id}"] = dados
+    
+    print("Dashboard completo:", dashboard_data)
+    ```
+    
+    **Dicas de Análise:**
+    - **Identifique Padrões:** Relatórios personalizados frequentemente revelam padrões
+      de negócio específicos da operação.
+    - **Combine com Outras Tools:** Use em conjunto com `vendas_periodo` e `consultar_dre`
+      para análises completas.
+    - **Automatize Dashboards:** Crie rotinas que executam múltiplos relatórios
+      personalizados para dashboards gerenciais.
+    - **Valide Dados:** Sempre valide os dados retornados, pois relatórios personalizados
+      podem ter regras de negócio complexas.
+    
+    **Casos de Uso Estratégicos:**
+    - **Dashboard Executivo:** Combinar múltiplos relatórios personalizados para visão
+      consolidada do negócio.
+    - **Análise de Margens:** Relatórios customizados para análise de margens por
+      produto, categoria ou região.
+    - **Compliance:** Relatórios específicos para auditorias e conformidade regulatória.
+    - **Análise de Tendências:** Relatórios históricos para identificação de tendências
+      de vendas e consumo.
+    
+    **Tools Relacionadas:**
+    - `vendas_periodo` - Relatório padrão de vendas
+    - `consultar_dre` - Demonstrativo de Resultados
+    - `consultar_relatorio_mapa` - Relatório de mapa de vendas
+    - `consultar_view` - Consultas a views customizadas
+    
+    **Observações Importantes:**
+    - Relatórios personalizados são específicos de cada instalação do webPosto.
+    - A estrutura de retorno pode variar conforme a configuração do relatório.
+    - Alguns relatórios podem exigir parâmetros adicionais não documentados aqui.
+    - Performance pode variar conforme complexidade do relatório.
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
@@ -3812,7 +3956,149 @@ def consultar_plano_conta_contabil(ultimo_codigo: Optional[int] = None, limite: 
 
 @mcp.tool()
 def consultar_placares(data_inicial: str, data_final: str) -> str:
-    """consultarPlacares - GET /INTEGRACAO/PLACARES"""
+    """
+    **Consulta placares de performance e rankings para gamificação e motivação.**
+    
+    Esta tool fornece dados de placares e rankings de performance, permitindo criar
+    sistemas de gamificação para motivação de equipes. Placares podem incluir rankings
+    de vendas, metas atingidas, produtividade e outros indicadores de performance.
+    
+    **Quando usar:**
+    - Para criar sistemas de gamificação e motivação de equipes
+    - Para exibir rankings de performance em TVs e monitores
+    - Para competições de vendas entre funcionários ou filiais
+    - Para acompanhamento de metas e reconhecimento de desempenho
+    - Para dashboards de performance em tempo real
+    - Para relatórios de produtividade
+    
+    **Conceito de Placares:**
+    Placares são rankings dinâmicos que mostram a performance de funcionários, filiais
+    ou produtos em relação a indicadores específicos. Eles promovem competição saudável
+    e reconhecimento de desempenho.
+    
+    **Fluxo de Uso Essencial:**
+    1. **Defina o Período:** Determine datas inicial e final para o placar.
+    2. **Execute a Consulta:** Chame `consultar_placares` com as datas.
+    3. **Exiba os Resultados:** Apresente rankings em dashboards ou TVs.
+    4. **Atualize Periodicamente:** Mantenha placares atualizados para engajamento.
+    
+    **Parâmetros:**
+    - `data_inicial` (str, obrigatório): Data de início do período do placar.
+      Formato: "YYYY-MM-DD"
+      Exemplo: "2025-01-01"
+    
+    - `data_final` (str, obrigatório): Data de fim do período do placar.
+      Formato: "YYYY-MM-DD"
+      Exemplo: "2025-01-31"
+    
+    **Retorno:**
+    Placares de performance contendo:
+    - Rankings de vendas por funcionário
+    - Rankings de vendas por filial
+    - Rankings de produtos mais vendidos
+    - Metas atingidas vs não atingidas
+    - Indicadores de performance (ticket médio, volume, etc)
+    - Posições no ranking
+    - Pontuações e badges (se configurado)
+    
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Placar mensal de vendas
+    placar_janeiro = consultar_placares(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31"
+    )
+    print("Top 10 vendedores:", placar_janeiro["ranking_vendedores"][:10])
+    
+    # Cenário 2: Placar semanal para competição
+    placar_semanal = consultar_placares(
+        data_inicial="2025-01-06",
+        data_final="2025-01-12"
+    )
+    
+    # Exibir top 3
+    top3 = placar_semanal["ranking_vendedores"][:3]
+    for i, vendedor in enumerate(top3, 1):
+        print(f"{i}º lugar: {vendedor['nome']} - R$ {vendedor['total_vendas']:,.2f}")
+    
+    # Cenário 3: Dashboard de gamificação em tempo real
+    # Atualizar placar a cada hora
+    import datetime
+    
+    hoje = datetime.date.today()
+    inicio_mes = hoje.replace(day=1)
+    
+    placar_atual = consultar_placares(
+        data_inicial=str(inicio_mes),
+        data_final=str(hoje)
+    )
+    
+    # Exibir em dashboard
+    dashboard_gamificacao = {
+        "periodo": f"{inicio_mes} a {hoje}",
+        "top_vendedores": placar_atual["ranking_vendedores"][:10],
+        "top_filiais": placar_atual["ranking_filiais"][:5],
+        "metas_atingidas": placar_atual["metas_atingidas"]
+    }
+    
+    # Cenário 4: Comparação de performance entre períodos
+    placar_mes_atual = consultar_placares(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31"
+    )
+    
+    placar_mes_anterior = consultar_placares(
+        data_inicial="2024-12-01",
+        data_final="2024-12-31"
+    )
+    
+    # Identificar vendedores que melhoraram posição
+    for vendedor in placar_mes_atual["ranking_vendedores"]:
+        pos_atual = vendedor["posicao"]
+        pos_anterior = next(
+            (v["posicao"] for v in placar_mes_anterior["ranking_vendedores"] 
+             if v["codigo"] == vendedor["codigo"]), 
+            None
+        )
+        if pos_anterior and pos_atual < pos_anterior:
+            print(f"{vendedor['nome']} subiu {pos_anterior - pos_atual} posições!")
+    ```
+    
+    **Dicas de Gamificação:**
+    - **Atualização Frequente:** Atualize placares regularmente (diário ou hora a hora)
+      para manter engajamento.
+    
+    - **Reconhecimento Público:** Exiba placares em locais visíveis (TVs, murais)
+      para reconhecimento e motivação.
+    
+    - **Múltiplos Rankings:** Crie rankings por diferentes métricas (volume, ticket
+      médio, satisfação) para valorizar diferentes competências.
+    
+    - **Metas Alcançáveis:** Defina metas desafiadoras mas alcançáveis para manter
+      motivação.
+    
+    - **Prêmios e Reconhecimento:** Associe placares a prêmios, badges ou
+      reconhecimentos para aumentar engajamento.
+    
+    **Casos de Uso Estratégicos:**
+    - **Competições de Vendas:** Criar competições mensais ou trimestrais.
+    - **Motivação de Equipes:** Usar rankings para motivar e engajar funcionários.
+    - **Identificação de Talentos:** Identificar vendedores de alto desempenho.
+    - **Benchmarking:** Comparar performance entre filiais.
+    - **Cultura de Performance:** Criar cultura focada em resultados e melhoria contínua.
+    
+    **Tools Relacionadas:**
+    - `produtividade_funcionario` - Análise detalhada de produtividade
+    - `vendas_periodo` - Detalhamento de vendas
+    - `consultar_funcionario_meta` - Metas de funcionários
+    - `consultar_relatorio_mapa` - Mapa de desempenho
+    
+    **Observações Importantes:**
+    - Placares devem ser usados para motivação positiva, não punitiva.
+    - Considere criar rankings por categorias (junior, pleno, sênior) para justiça.
+    - Combine métricas quantitativas (vendas) com qualitativas (satisfação do cliente).
+    - Atualize placares em horários estratégicos para maximizar visibilidade.
+    """
     params = {}
     if data_inicial is not None:
         params["dataInicial"] = data_inicial
@@ -3826,7 +4112,59 @@ def consultar_placares(data_inicial: str, data_final: str) -> str:
 
 @mcp.tool()
 def consultar_pisconfins(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarPisconfins - GET /INTEGRACAO/PIS_COFINS"""
+    """
+    **Consulta configurações de PIS e COFINS para compliance tributário federal.**
+    
+    Esta tool fornece acesso às configurações de PIS (Programa de Integração Social) e
+    COFINS (Contribuição para Financiamento da Seguridade Social) cadastradas no sistema.
+    Essencial para cálculo correto de tributos federais e compliance fiscal.
+    
+    **Quando usar:**
+    - Para consultar alíquotas de PIS e COFINS
+    - Para validação de cálculos tributários federais
+    - Para auditorias fiscais
+    - Para apuração de impostos
+    - Para compliance com legislação federal
+    - Para integrações contábeis
+    
+    **Conceito de PIS/COFINS:**
+    PIS e COFINS são contribuições federais calculadas sobre o faturamento.
+    Podem ser apuradas em regime cumulativo ou não-cumulativo, com alíquotas diferentes.
+    
+    **Parâmetros:**
+    - `ultimo_codigo` (int, opcional): Para paginação.
+    - `limite` (int, opcional): Número máximo de registros (default: 100).
+    
+    **Retorno:**
+    Configurações de PIS/COFINS contendo:
+    - Alíquotas de PIS
+    - Alíquotas de COFINS
+    - CST (Código de Situação Tributária)
+    - Regime de apuração (cumulativo/não-cumulativo)
+    - Base de cálculo
+    - Isenções e benefícios fiscais
+    
+    **Exemplo de Uso (Python):**
+    ```python
+    # Listar configurações de PIS/COFINS
+    pis_cofins = consultar_pisconfins(limite=200)
+    
+    # Calcular PIS/COFINS sobre uma venda
+    valor_venda = 1000.00
+    config = pis_cofins[0]  # Primeira configuração
+    
+    pis = valor_venda * (config["aliquotaPIS"] / 100)
+    cofins = valor_venda * (config["aliquotaCOFINS"] / 100)
+    
+    print(f"PIS: R$ {pis:.2f}")
+    print(f"COFINS: R$ {cofins:.2f}")
+    print(f"Total: R$ {pis + cofins:.2f}")
+    ```
+    
+    **Tools Relacionadas:**
+    - `consultar_icms` - Configurações de ICMS
+    - `consultar_dre` - Análise financeira com impostos
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
@@ -4092,7 +4430,52 @@ def consultar_nota_saida_item(data_inicial: Optional[str] = None, data_final: Op
 
 @mcp.tool()
 def consultar_nota_manifestacao(data_inicial: Optional[str] = None, data_final: Optional[str] = None, compra_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, manifestacao_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarNotaManifestacao - GET /INTEGRACAO/NOTA_MANIFESTACAO"""
+    """
+    **Consulta manifestações de notas fiscais eletrônicas (NFe).**
+    
+    Esta tool permite consultar manifestações realizadas sobre notas fiscais eletrônicas
+    recebidas. A manifestação é obrigatória para confirmar ou recusar o recebimento de
+    mercadorias e é essencial para compliance fiscal.
+    
+    **Quando usar:**
+    - Para consultar status de manifestações de NFe
+    - Para auditorias de notas fiscais recebidas
+    - Para compliance com SEFAZ
+    - Para validação de recebimento de mercadorias
+    - Para integrações contábeis
+    
+    **Tipos de Manifestação:**
+    - Confirmação da Operação
+    - Ciência da Emissão
+    - Desconhecimento da Operação
+    - Operação Não Realizada
+    
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, opcional): Período de consulta.
+      Formato: "YYYY-MM-DD"
+    - `empresa_codigo` (int, opcional): Filtrar por empresa.
+    - `compra_codigo` (int, opcional): Filtrar por compra específica.
+    - `manifestacao_codigo` (int, opcional): Filtrar por manifestação específica.
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação.
+    
+    **Exemplo de Uso (Python):**
+    ```python
+    # Consultar manifestações do mês
+    manifestacoes = consultar_nota_manifestacao(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=7
+    )
+    
+    # Verificar manifestações pendentes
+    pendentes = [m for m in manifestacoes if m["status"] == "PENDENTE"]
+    print(f"Manifestações pendentes: {len(pendentes)}")
+    ```
+    
+    **Tools Relacionadas:**
+    - `autorizar_nfe` - Autorizar emissão de NFe
+    - `consultar_icms` - Configurações tributárias
+    """
     params = {}
     if data_inicial is not None:
         params["dataInicial"] = data_inicial
@@ -4254,7 +4637,104 @@ def consult_nfcea_xml(id: str, modelo_documento: int, numero_documento: int, emp
 
 @mcp.tool()
 def consultar_relatorio_mapa(data_inicial: str, data_final: str, empresa_codigo: Optional[list] = None, venda_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, quitado: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, origem: Optional[str] = None) -> str:
-    """consultarRelatorioMapa - GET /INTEGRACAO/MAPA_DESEMPENHO"""
+    """
+    **Gera o Mapa de Desempenho consolidando vendas, custos e performance.**
+    
+    Esta tool fornece uma visão consolidada do desempenho operacional, combinando dados
+    de vendas, custos, margens e indicadores de performance em um único relatório.
+    É essencial para análise gerencial e tomada de decisões estratégicas.
+    
+    **Quando usar:**
+    - Para análise consolidada de performance
+    - Para dashboards gerenciais
+    - Para comparação de desempenho entre filiais
+    - Para identificação de oportunidades de melhoria
+    - Para relatórios executivos
+    - Para acompanhamento de metas e KPIs
+    
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha IDs das Empresas:** Use `consultar_empresa` para listar filiais.
+    2. **Defina o Período:** Determine datas inicial e final.
+    3. **Execute o Mapa:** Chame `consultar_relatorio_mapa` com filtros desejados.
+    4. **Analise Performance:** Interprete indicadores e identifique insights.
+    
+    **Parâmetros:**
+    - `data_inicial` (str, obrigatório): Data de início.
+      Formato: "YYYY-MM-DD"
+      Exemplo: "2025-01-01"
+    
+    - `data_final` (str, obrigatório): Data de fim.
+      Formato: "YYYY-MM-DD"
+      Exemplo: "2025-01-31"
+    
+    - `empresa_codigo` (List[int], opcional): Lista de códigos das empresas.
+      Obter via: `consultar_empresa`
+      Exemplo: [7, 12]
+    
+    - `venda_codigo` (int, opcional): Filtrar por venda específica.
+      Exemplo: 12345
+    
+    - `quitado` (bool, opcional): Filtrar por vendas quitadas/não quitadas.
+      Exemplo: True
+    
+    - `origem` (str, opcional): Filtrar por origem da venda (PDV, APP, etc).
+      Exemplo: "PDV"
+    
+    - `data_hora_atualizacao` (str, opcional): Filtrar registros atualizados após data/hora.
+      Formato: "YYYY-MM-DD HH:MM:SS"
+      Exemplo: "2025-01-10 08:00:00"
+    
+    - `limite` (int, opcional): Número máximo de registros (default: 100).
+    - `ultimo_codigo` (int, opcional): Para paginação.
+    
+    **Retorno:**
+    Mapa de desempenho contendo:
+    - Vendas totais por período
+    - Custos e margens
+    - Ticket médio
+    - Volume de transações
+    - Performance por filial
+    - Indicadores de eficiência
+    - Comparações com períodos anteriores
+    
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Mapa de desempenho mensal de uma filial
+    mapa_janeiro = consultar_relatorio_mapa(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=[7]
+    )
+    
+    # Cenário 2: Comparação de desempenho entre filiais
+    mapa_consolidado = consultar_relatorio_mapa(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=[7, 12, 25]
+    )
+    
+    # Cenário 3: Análise de vendas quitadas
+    vendas_quitadas = consultar_relatorio_mapa(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        empresa_codigo=[7],
+        quitado=True
+    )
+    ```
+    
+    **Dicas de Análise:**
+    - Compare margens entre filiais para identificar melhores práticas
+    - Analise ticket médio para avaliar estratégias de vendas
+    - Monitore volume de transações para identificar tendências
+    
+    **Dependências:**
+    - Opcional: `consultar_empresa` (para obter empresa_codigo)
+    
+    **Tools Relacionadas:**
+    - `vendas_periodo` - Detalhamento de vendas
+    - `consultar_dre` - Análise financeira completa
+    - `relatorio_pernonalizado` - Relatórios customizados
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -4282,7 +4762,48 @@ def consultar_relatorio_mapa(data_inicial: str, data_final: str, empresa_codigo:
 
 @mcp.tool()
 def consultar_icms(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarIcms - GET /INTEGRACAO/ICMS"""
+    """
+    **Consulta configurações e alíquotas de ICMS para compliance tributário.**
+    
+    Esta tool fornece acesso às configurações de ICMS (Imposto sobre Circulação de
+    Mercadorias e Serviços) cadastradas no sistema, incluindo alíquotas, CSTs, CFOPs
+    e regras de tributação. Essencial para compliance fiscal e cálculo correto de impostos.
+    
+    **Quando usar:**
+    - Para consultar alíquotas de ICMS por estado e produto
+    - Para validação de cálculos tributários
+    - Para auditorias fiscais
+    - Para configuração de novos produtos
+    - Para compliance com legislação tributária
+    - Para integrações com sistemas contábeis
+    
+    **Parâmetros:**
+    - `ultimo_codigo` (int, opcional): Para paginação.
+    - `limite` (int, opcional): Número máximo de registros (default: 100).
+    
+    **Retorno:**
+    Configurações de ICMS contendo:
+    - Alíquotas por estado (UF)
+    - CST (Código de Situação Tributária)
+    - CFOP (Código Fiscal de Operações)
+    - Base de cálculo
+    - Reduções de base
+    - Isenções e benefícios fiscais
+    
+    **Exemplo de Uso (Python):**
+    ```python
+    # Listar todas as configurações de ICMS
+    icms_config = consultar_icms(limite=500)
+    
+    # Filtrar alíquota para um estado específico
+    icms_sp = [i for i in icms_config if i["uf"] == "SP"]
+    print(f"Alíquota ICMS SP: {icms_sp[0]['aliquota']}%")
+    ```
+    
+    **Tools Relacionadas:**
+    - `consultar_pisconfins` - Configurações de PIS/COFINS
+    - `consultar_nota_manifestacao` - Manifestação de notas fiscais
+    """
     params = {}
     if ultimo_codigo is not None:
         params["ultimoCodigo"] = ultimo_codigo
@@ -5087,7 +5608,187 @@ def consultar_duplicata(data_inicial: Optional[str] = None, data_final: Optional
 
 @mcp.tool()
 def consultar_dre(data_inicial: str, data_final: str, apuracao_caixa: Optional[bool] = None, cfop_outras_saidas: Optional[bool] = None, apurar_juros_descontos: Optional[bool] = None, filiais: Optional[list] = None, centro_custo_codigo: Optional[list] = None, apurar_centro_custo_produto: Optional[bool] = None) -> str:
-    """consultarDre - GET /INTEGRACAO/DRE"""
+    """
+    **Gera o Demonstrativo de Resultados do Exercício (DRE) para análise financeira.**
+    
+    Esta tool é fundamental para gestão financeira e contábil, fornecendo uma visão completa
+    da performance econômica do negócio. O DRE apresenta receitas, custos, despesas e
+    resultado líquido de forma estruturada, permitindo análise de rentabilidade e tomada
+    de decisões estratégicas.
+    
+    **Quando usar:**
+    - Para análise de rentabilidade do negócio
+    - Para fechamento contábil mensal/anual
+    - Para comparação de performance entre períodos
+    - Para análise de margens de contribuição
+    - Para identificação de oportunidades de redução de custos
+    - Para relatórios gerenciais e executivos
+    - Para compliance contábil e fiscal
+    
+    **Estrutura do DRE:**
+    O DRE segue a estrutura contábil padrão:
+    ```
+    Receita Bruta
+    (-) Deduções e Abatimentos
+    (=) Receita Líquida
+    (-) Custo das Mercadorias Vendidas (CMV)
+    (=) Lucro Bruto
+    (-) Despesas Operacionais
+    (=) Resultado Operacional (EBITDA)
+    (+/-) Resultado Financeiro
+    (=) Resultado antes de Impostos
+    (-) Impostos
+    (=) Resultado Líquido
+    ```
+    
+    **Fluxo de Uso Essencial:**
+    1. **Obtenha IDs das Filiais:** Use `consultar_empresa` para obter códigos das filiais.
+    2. **Defina o Período:** Determine as datas inicial e final para análise.
+    3. **Configure Parâmetros:** Escolha o tipo de apuração (caixa ou competência).
+    4. **Execute o DRE:** Chame `consultar_dre` com os parâmetros configurados.
+    5. **Analise Resultados:** Interprete os indicadores e identifique insights.
+    
+    **Parâmetros:**
+    - `data_inicial` (str, obrigatório): Data de início do período.
+      Formato: "YYYY-MM-DD"
+      Exemplo: "2025-01-01"
+    
+    - `data_final` (str, obrigatório): Data de fim do período.
+      Formato: "YYYY-MM-DD"
+      Exemplo: "2025-01-31"
+    
+    - `filiais` (List[int], opcional): Lista de códigos das filiais para incluir no DRE.
+      Obter via: `consultar_empresa`
+      Exemplo: [7, 12, 25]
+    
+    - `apuracao_caixa` (bool, opcional): Se True, usa regime de caixa; se False, competência.
+      Default: False (competência)
+      Exemplo: True
+    
+    - `cfop_outras_saidas` (bool, opcional): Se True, inclui CFOPs de outras saídas no DRE.
+      Exemplo: False
+    
+    - `apurar_juros_descontos` (bool, opcional): Se True, separa juros e descontos no resultado.
+      Exemplo: True
+    
+    - `centro_custo_codigo` (List[int], opcional): Filtrar por centros de custo específicos.
+      Obter via: `consultar_centro_custo`
+      Exemplo: [10, 20]
+    
+    - `apurar_centro_custo_produto` (bool, opcional): Se True, detalha por centro de custo/produto.
+      Exemplo: True
+    
+    **Retorno:**
+    DRE estruturado contendo:
+    - Receita bruta total
+    - Deduções (devoluções, descontos, impostos)
+    - Receita líquida
+    - Custo das mercadorias vendidas (CMV)
+    - Lucro bruto e margem bruta (%)
+    - Despesas operacionais detalhadas
+    - Resultado operacional (EBITDA)
+    - Resultado financeiro (juros, descontos)
+    - Resultado líquido e margem líquida (%)
+    - Indicadores de performance (ROI, ROE)
+    
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: DRE mensal simples (regime de competência)
+    dre_janeiro = consultar_dre(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        filiais=[7],
+        apuracao_caixa=False
+    )
+    print("DRE Janeiro:", dre_janeiro)
+    
+    # Cenário 2: DRE consolidado de múltiplas filiais (regime de caixa)
+    dre_consolidado = consultar_dre(
+        data_inicial="2025-01-01",
+        data_final="2025-03-31",
+        filiais=[7, 12, 25],
+        apuracao_caixa=True,
+        apurar_juros_descontos=True
+    )
+    
+    # Cenário 3: DRE detalhado por centro de custo
+    dre_detalhado = consultar_dre(
+        data_inicial="2025-01-01",
+        data_final="2025-12-31",
+        filiais=[7],
+        centro_custo_codigo=[10, 20, 30],
+        apurar_centro_custo_produto=True
+    )
+    
+    # Cenário 4: Comparação entre períodos
+    # DRE do mês atual
+    dre_atual = consultar_dre(
+        data_inicial="2025-01-01",
+        data_final="2025-01-31",
+        filiais=[7]
+    )
+    
+    # DRE do mês anterior
+    dre_anterior = consultar_dre(
+        data_inicial="2024-12-01",
+        data_final="2024-12-31",
+        filiais=[7]
+    )
+    
+    # Calcular variação
+    variacao_receita = (
+        (dre_atual["receitaLiquida"] - dre_anterior["receitaLiquida"]) / 
+        dre_anterior["receitaLiquida"] * 100
+    )
+    print(f"Variação de receita: {variacao_receita:.2f}%")
+    ```
+    
+    **Dicas de Análise:**
+    - **Margem Bruta:** Indica eficiência na precificação e gestão de custos.
+      Ideal: > 30% para postos de combustível.
+    
+    - **Margem Líquida:** Mostra a rentabilidade final do negócio.
+      Ideal: > 5% para o setor.
+    
+    - **EBITDA:** Mede a capacidade de geração de caixa operacional.
+      Quanto maior, melhor a saúde financeira.
+    
+    - **Comparações:** Sempre compare DREs de períodos similares (mês vs mês,
+      ano vs ano) para identificar tendências.
+    
+    - **Análise Vertical:** Calcule cada linha do DRE como % da receita líquida
+      para identificar desvios.
+    
+    - **Análise Horizontal:** Compare DREs de períodos consecutivos para identificar
+      crescimento ou redução de itens específicos.
+    
+    **Casos de Uso Estratégicos:**
+    - **Planejamento Orçamentário:** Use DREs históricos para projetar orçamentos futuros.
+    - **Análise de Viabilidade:** Avalie a viabilidade de novos investimentos ou expansões.
+    - **Negociação com Fornecedores:** Use dados de CMV para negociar melhores condições.
+    - **Gestão de Custos:** Identifique despesas que podem ser otimizadas ou eliminadas.
+    - **Valuation:** DREs são essenciais para avaliação do valor da empresa.
+    
+    **Dependências:**
+    - Opcional: `consultar_empresa` (para obter filiais)
+    - Opcional: `consultar_centro_custo` (para filtrar por centro de custo)
+    
+    **Tools Relacionadas:**
+    - `vendas_periodo` - Detalhamento das receitas
+    - `consultar_despesa_financeiro_rede` - Análise de despesas
+    - `relatorio_pernonalizado` - Relatórios customizados
+    - `consultar_relatorio_mapa` - Mapa de vendas e custos
+    
+    **Observações Importantes:**
+    - **Regime de Caixa vs Competência:** Escolha conforme necessidade contábil.
+      Caixa: considera quando o dinheiro entra/sai.
+      Competência: considera quando a transação ocorre.
+    
+    - **Performance:** DREs consolidados de múltiplas filiais podem demorar mais para processar.
+    
+    - **Precisão:** Garanta que todos os lançamentos contábeis estejam corretos antes
+      de gerar o DRE.
+    """
     params = {}
     if apuracao_caixa is not None:
         params["apuracaoCaixa"] = apuracao_caixa
@@ -5327,7 +6028,103 @@ def consumo_cliente(token: str, data_inicial: Optional[str] = None, data_final: 
 
 @mcp.tool()
 def consultar_view(dias: Optional[int] = None, volume_minimo: Optional[int] = None, view: Optional[str] = None) -> str:
-    """consultarView - GET /INTEGRACAO/CONSULTAR_VIEW"""
+    """
+    **Consulta views customizadas do banco de dados para análises avançadas.**
+    
+    Esta tool permite acessar views (visões) SQL customizadas criadas no banco de dados
+    do webPosto. Views são consultas pré-definidas que podem combinar dados de múltiplas
+    tabelas, aplicar filtros complexos e fornecer dados agregados para análises específicas.
+    
+    **Quando usar:**
+    - Para acessar dados agregados e pré-processados
+    - Para análises que requerem joins complexos
+    - Para dashboards que necessitam de dados consolidados
+    - Para relatórios customizados com regras de negócio específicas
+    - Para consultas de performance otimizadas
+    
+    **Conceito de Views:**
+    Views são "tabelas virtuais" que não armazenam dados, mas sim consultas SQL.
+    Elas simplificam consultas complexas e garantem consistência nos dados retornados.
+    
+    **Fluxo de Uso Essencial:**
+    1. **Identifique a View:** Determine qual view contém os dados necessários.
+    2. **Configure Filtros:** Defina parâmetros como dias e volume mínimo.
+    3. **Execute a Consulta:** Chame `consultar_view` com os parâmetros.
+    4. **Processe Resultados:** Analise os dados retornados.
+    
+    **Parâmetros:**
+    - `view` (str, opcional): Nome da view a ser consultada.
+      Exemplos: "vw_vendas_consolidadas", "vw_estoque_critico", "vw_performance_produtos"
+    
+    - `dias` (int, opcional): Número de dias para filtrar dados históricos.
+      Exemplo: 30 (dados dos últimos 30 dias)
+    
+    - `volume_minimo` (int, opcional): Volume mínimo para filtrar resultados.
+      Exemplo: 1000 (apenas registros com volume >= 1000)
+    
+    **Retorno:**
+    Dados da view consultada, que podem incluir:
+    - Dados agregados (somas, médias, contagens)
+    - Dados consolidados de múltiplas tabelas
+    - Indicadores calculados
+    - Rankings e classificações
+    - Tendências e comparações
+    
+    **Exemplo de Uso (Python):**
+    ```python
+    # Cenário 1: Consultar view de vendas consolidadas dos últimos 30 dias
+    vendas_consolidadas = consultar_view(
+        view="vw_vendas_consolidadas",
+        dias=30
+    )
+    
+    # Cenário 2: Consultar produtos com estoque crítico
+    estoque_critico = consultar_view(
+        view="vw_estoque_critico",
+        volume_minimo=100
+    )
+    
+    # Cenário 3: Análise de performance de produtos
+    performance = consultar_view(
+        view="vw_performance_produtos",
+        dias=90,
+        volume_minimo=500
+    )
+    
+    # Cenário 4: Dashboard executivo
+    # Combinar múltiplas views para dashboard completo
+    dashboard = {
+        "vendas": consultar_view(view="vw_vendas_consolidadas", dias=30),
+        "estoque": consultar_view(view="vw_estoque_critico"),
+        "performance": consultar_view(view="vw_performance_produtos", dias=30)
+    }
+    ```
+    
+    **Dicas de Análise:**
+    - **Identifique Views Disponíveis:** Consulte a documentação do sistema ou DBA
+      para conhecer as views disponíveis.
+    - **Otimize Filtros:** Use parâmetros de filtro para reduzir o volume de dados
+      retornados e melhorar performance.
+    - **Combine Views:** Use múltiplas views para criar análises completas.
+    - **Cache Resultados:** Para dashboards, considere cachear resultados de views
+      que não mudam frequentemente.
+    
+    **Casos de Uso Estratégicos:**
+    - **Dashboard Executivo:** Combinar views de vendas, estoque e financeiro.
+    - **Análise de Tendências:** Views com dados históricos agregados.
+    - **Alertas Automáticos:** Views de estoque crítico, vendas baixas, etc.
+    - **Relatórios Regulatórios:** Views pré-configuradas para compliance.
+    
+    **Tools Relacionadas:**
+    - `relatorio_pernonalizado` - Relatórios customizados
+    - `consultar_dre` - Análise financeira
+    - `consultar_relatorio_mapa` - Mapa de desempenho
+    
+    **Observações Importantes:**
+    - Views disponíveis variam conforme configuração do sistema.
+    - Algumas views podem ter performance variável conforme volume de dados.
+    - Consulte documentação específica de cada view para entender estrutura de retorno.
+    """
     params = {}
     if dias is not None:
         params["dias"] = dias
