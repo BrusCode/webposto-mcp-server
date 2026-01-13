@@ -78,6 +78,27 @@ class WebPostoClient:
         self.base_url = base_url.rstrip('/')
         self.timeout = 30
     
+    def _normalize_params(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Normaliza parâmetros para compatibilidade com a API WebPosto.
+        
+        Converte booleanos Python (True/False) para strings minúsculas (true/false)
+        que a API WebPosto espera.
+        """
+        if params is None:
+            return {}
+        
+        normalized = {}
+        for key, value in params.items():
+            if isinstance(value, bool):
+                # Converter booleano Python para string minúscula
+                normalized[key] = str(value).lower()
+            elif isinstance(value, list):
+                # Processar listas recursivamente
+                normalized[key] = [str(v).lower() if isinstance(v, bool) else v for v in value]
+            else:
+                normalized[key] = value
+        return normalized
+    
     def _add_auth_param(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Adiciona o parâmetro de autenticação 'chave' aos parâmetros da requisição.
         
@@ -103,6 +124,9 @@ class WebPostoClient:
     ) -> Dict[str, Any]:
         """Executa uma requisição HTTP para a API."""
         url = f"{self.base_url}{endpoint}"
+        # Normalizar parâmetros (converter booleanos para strings minúsculas)
+        params = self._normalize_params(params)
+        # Adicionar autenticação
         params = self._add_auth_param(params)
         
         try:
