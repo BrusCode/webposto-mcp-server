@@ -278,7 +278,25 @@ def format_response(data: Any, max_records: int = 50) -> str:
     if isinstance(data, list):
         records = data
     elif isinstance(data, dict):
-        records = data.get('resultados', data.get('registros', data.get('data', [])))
+        # Suportar formato CORPO.DAD da API WebPosto (relatórios)
+        if 'CORPO' in data and isinstance(data['CORPO'], dict):
+            corpo = data['CORPO']
+            if 'DAD' in corpo and isinstance(corpo['DAD'], list):
+                # Combinar colunas (CAM) com dados (DAD) para criar objetos
+                colunas = corpo.get('CAM', [])
+                dados = corpo['DAD']
+                if colunas and dados:
+                    records = [
+                        dict(zip(colunas, linha)) for linha in dados
+                    ]
+                else:
+                    records = dados
+            else:
+                records = []
+        else:
+            # Formato padrão: resultados, registros ou data
+            records = data.get('resultados', data.get('registros', data.get('data', [])))
+        
         if not isinstance(records, list):
             return json.dumps(data, indent=2, ensure_ascii=False)
     else:
