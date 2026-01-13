@@ -278,21 +278,31 @@ def format_response(data: Any, max_records: int = 50) -> str:
     if isinstance(data, list):
         records = data
     elif isinstance(data, dict):
-        # Suportar formato CORPO.DAD da API WebPosto (relatórios)
-        if 'CORPO' in data and isinstance(data['CORPO'], dict):
+        # Suportar formato CAM/DAD da API WebPosto (relatórios)
+        # Formato 1: CAM e DAD na raiz {"CAM": [...], "DAD": [...]}
+        # Formato 2: CAM e DAD dentro de CORPO {"CORPO": {"CAM": [...], "DAD": [...]}}
+        
+        cam_dad_source = None
+        
+        # Verificar formato 1: CAM/DAD na raiz
+        if 'CAM' in data and 'DAD' in data and isinstance(data['DAD'], list):
+            cam_dad_source = data
+        # Verificar formato 2: CAM/DAD dentro de CORPO
+        elif 'CORPO' in data and isinstance(data['CORPO'], dict):
             corpo = data['CORPO']
-            if 'DAD' in corpo and isinstance(corpo['DAD'], list):
-                # Combinar colunas (CAM) com dados (DAD) para criar objetos
-                colunas = corpo.get('CAM', [])
-                dados = corpo['DAD']
-                if colunas and dados:
-                    records = [
-                        dict(zip(colunas, linha)) for linha in dados
-                    ]
-                else:
-                    records = dados
+            if 'CAM' in corpo and 'DAD' in corpo and isinstance(corpo['DAD'], list):
+                cam_dad_source = corpo
+        
+        if cam_dad_source:
+            # Combinar colunas (CAM) com dados (DAD) para criar objetos
+            colunas = cam_dad_source.get('CAM', [])
+            dados = cam_dad_source['DAD']
+            if colunas and dados:
+                records = [
+                    dict(zip(colunas, linha)) for linha in dados
+                ]
             else:
-                records = []
+                records = dados if dados else []
         else:
             # Formato padrão: resultados, registros ou data
             records = data.get('resultados', data.get('registros', data.get('data', [])))
