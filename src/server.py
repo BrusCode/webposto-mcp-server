@@ -76,7 +76,7 @@ class WebPostoClient:
     
     def __init__(self, base_url: str = WEBPOSTO_BASE_URL):
         self.base_url = base_url.rstrip('/')
-        self.timeout = 30
+        self.timeout = 180  # Aumentado para suportar requisições pesadas (ex: consultar_abastecimento)
     
     def _normalize_params(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Normaliza parâmetros para compatibilidade com a API WebPosto.
