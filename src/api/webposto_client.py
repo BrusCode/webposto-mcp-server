@@ -46,7 +46,7 @@ class WebPostoClient:
         """
         self.base_url = (base_url or WEBPOSTO_BASE_URL).rstrip('/')
         self.api_key = api_key or API_KEY
-        self.timeout = 30
+        self.timeout = 180  # Aumentado para suportar requisições pesadas (ex: consultar_abastecimento)
     
     @property
     def headers(self) -> Dict[str, str]:
