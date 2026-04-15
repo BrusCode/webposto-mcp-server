@@ -6,6 +6,7 @@ Autor: Quality Automação
 Versão: 1.0.0
 """
 
+import os
 import json
 from pathlib import Path
 from typing import Any, Dict, List
@@ -14,7 +15,6 @@ from typing import Any, Dict, List
 # RESOURCES - Documentação e Schemas
 # =============================================================================
 
-
 def get_resources_list() -> List[Dict[str, Any]]:
     """Retorna lista de resources disponíveis."""
     return [
@@ -22,28 +22,27 @@ def get_resources_list() -> List[Dict[str, Any]]:
             "uri": "file:///docs/GUIA_USO_APIS.md",
             "name": "Guia de Uso das APIs",
             "description": "Documentação completa sobre como usar as APIs do webPosto",
-            "mimeType": "text/markdown",
+            "mimeType": "text/markdown"
         },
         {
             "uri": "file:///docs/mapeamento_dependencias_apis.md",
             "name": "Mapeamento de Dependências",
             "description": "Mapeamento completo das dependências entre APIs e fluxos de dados",
-            "mimeType": "text/markdown",
+            "mimeType": "text/markdown"
         },
         {
             "uri": "file:///docs/prompt_agente_webposto.md",
             "name": "Prompt do Agente webPosto",
             "description": "Prompt otimizado para agentes de IA interagirem com o sistema webPosto",
-            "mimeType": "text/markdown",
+            "mimeType": "text/markdown"
         },
         {
             "uri": "schema://tools",
             "name": "Schema das Tools MCP",
             "description": "Schema JSON com todas as tools disponíveis no servidor MCP",
-            "mimeType": "application/json",
-        },
+            "mimeType": "application/json"
+        }
     ]
-
 
 def read_resource(uri: str) -> str:
     """Lê o conteúdo de um resource."""
@@ -51,42 +50,37 @@ def read_resource(uri: str) -> str:
         # Extrair o nome do arquivo
         filename = uri.replace("file:///docs/", "")
         docs_path = Path(__file__).parent.parent / "docs" / filename
-
+        
         if docs_path.exists():
-            with open(docs_path, "r", encoding="utf-8") as f:
+            with open(docs_path, 'r', encoding='utf-8') as f:
                 return f.read()
         else:
             return f"Erro: Arquivo não encontrado: {filename}"
-
+    
     elif uri == "schema://tools":
         # Retornar schema das tools (será gerado dinamicamente)
-        return json.dumps(
-            {
-                "description": "Schema das tools MCP do webPosto",
-                "note": "Este schema é gerado dinamicamente pelo servidor MCP",
-                "tools_count": "144 tools disponíveis",
-                "categories": [
-                    "Vendas e Abastecimento",
-                    "Financeiro",
-                    "Estoque e Produtos",
-                    "Fiscal e Documentos",
-                    "Cadastros",
-                    "Relatórios e Análises",
-                    "Compras e Fornecedores",
-                    "Pedidos",
-                    "Configurações",
-                ],
-            },
-            indent=2,
-        )
-
+        return json.dumps({
+            "description": "Schema das tools MCP do webPosto",
+            "note": "Este schema é gerado dinamicamente pelo servidor MCP",
+            "tools_count": "144 tools disponíveis",
+            "categories": [
+                "Vendas e Abastecimento",
+                "Financeiro",
+                "Estoque e Produtos",
+                "Fiscal e Documentos",
+                "Cadastros",
+                "Relatórios e Análises",
+                "Compras e Fornecedores",
+                "Pedidos",
+                "Configurações"
+            ]
+        }, indent=2)
+    
     return "Erro: Resource não encontrado"
-
 
 # =============================================================================
 # PROMPTS - Templates Pré-configurados
 # =============================================================================
-
 
 def get_prompts_list() -> List[Dict[str, Any]]:
     """Retorna lista de prompts disponíveis."""
@@ -98,14 +92,14 @@ def get_prompts_list() -> List[Dict[str, Any]]:
                 {
                     "name": "periodo",
                     "description": "Período para análise (ex: 'últimos 30 dias', 'mês atual')",
-                    "required": True,
+                    "required": True
                 },
                 {
                     "name": "unidade_negocio",
                     "description": "Código da unidade de negócio",
-                    "required": False,
-                },
-            ],
+                    "required": False
+                }
+            ]
         },
         {
             "name": "consulta_estoque",
@@ -114,14 +108,14 @@ def get_prompts_list() -> List[Dict[str, Any]]:
                 {
                     "name": "tipo_produto",
                     "description": "Tipo de produto (combustível, conveniência, todos)",
-                    "required": False,
+                    "required": False
                 },
                 {
                     "name": "unidade_negocio",
                     "description": "Código da unidade de negócio",
-                    "required": False,
-                },
-            ],
+                    "required": False
+                }
+            ]
         },
         {
             "name": "relatorio_financeiro",
@@ -130,37 +124,40 @@ def get_prompts_list() -> List[Dict[str, Any]]:
                 {
                     "name": "periodo",
                     "description": "Período para análise (ex: 'mês atual', 'próximos 7 dias')",
-                    "required": True,
+                    "required": True
                 },
                 {
                     "name": "tipo",
                     "description": "Tipo de relatório (pagar, receber, ambos)",
-                    "required": False,
-                },
-            ],
+                    "required": False
+                }
+            ]
         },
         {
             "name": "analise_abastecimento",
             "description": "Análise detalhada de abastecimentos e equipamentos",
             "arguments": [
-                {"name": "periodo", "description": "Período para análise", "required": True},
+                {
+                    "name": "periodo",
+                    "description": "Período para análise",
+                    "required": True
+                },
                 {
                     "name": "bomba_codigo",
                     "description": "Código da bomba (opcional, para análise específica)",
-                    "required": False,
-                },
-            ],
-        },
+                    "required": False
+                }
+            ]
+        }
     ]
-
 
 def get_prompt(name: str, arguments: Dict[str, Any]) -> str:
     """Retorna o prompt formatado com os argumentos."""
-
+    
     if name == "analise_vendas":
         periodo = arguments.get("periodo", "últimos 30 dias")
         unidade = arguments.get("unidade_negocio", "todas")
-
+        
         return f"""Realize uma análise completa de vendas para o período: {periodo}.
 
 **Etapas da Análise:**
@@ -195,7 +192,7 @@ Apresente os resultados de forma clara e estruturada, com gráficos textuais qua
     elif name == "consulta_estoque":
         tipo = arguments.get("tipo_produto", "todos")
         unidade = arguments.get("unidade_negocio", "todas")
-
+        
         return f"""Realize uma consulta detalhada de estoque.
 
 **Parâmetros:**
@@ -228,7 +225,7 @@ Tabela com: Produto | Estoque Atual | Status | Recomendação"""
     elif name == "relatorio_financeiro":
         periodo = arguments.get("periodo", "mês atual")
         tipo = arguments.get("tipo", "ambos")
-
+        
         return f"""Gere um relatório financeiro completo para: {periodo}.
 
 **Tipo de Relatório:** {tipo}
@@ -261,7 +258,7 @@ Resumo executivo + tabelas detalhadas por categoria"""
     elif name == "analise_abastecimento":
         periodo = arguments.get("periodo", "últimos 7 dias")
         bomba = arguments.get("bomba_codigo", "todas")
-
+        
         return f"""Análise detalhada de abastecimentos.
 
 **Parâmetros:**

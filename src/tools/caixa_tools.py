@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 
 from typing import Optional
-
 from mcp.server.fastmcp import tool
-
 from src.api.webposto_client import api_client
-
 
 @tool()
 def consultar_caixas(
@@ -13,7 +10,7 @@ def consultar_caixas(
     data_final: Optional[str] = None,
     turno: Optional[int] = None,
     empresa_codigo: Optional[str] = None,
-    limite: Optional[int] = 100,
+    limite: Optional[int] = 100
 ) -> str:
     """
     Consulta informações de caixas no período especificado.
@@ -34,7 +31,7 @@ def consultar_caixas(
     params = {
         "dataInicial": data_inicial,
         "dataFinal": data_final,
-        "limite": min(limite, 2000),  # Garante que o limite não ultrapasse 2000
+        "limite": min(limite, 2000)  # Garante que o limite não ultrapasse 2000
     }
     if turno:
         params["turno"] = turno
@@ -59,5 +56,5 @@ def consultar_caixas(
         output.append(
             f"- Caixa ID: {caixa.get('caixaCodigo')} | Status: {status} | Operador: {caixa.get('operador', {}).get('nome')} | Total: R$ {caixa.get('apurado', 0):.2f}"
         )
-
+    
     return "\n".join(output)

@@ -20,9 +20,9 @@ jobs:
           cache: "pip"
 
       - name: Install dev dependencies
-        run: pip install "ruff>=0.4" "black>=24" isort
+        run: pip install ruff black isort
 
-      - name: ruff (linting — erros reais E,F,W)
+      - name: ruff (linting)
         run: ruff check src/ tests/
 
       - name: black (format check)
@@ -35,7 +35,6 @@ jobs:
     name: Smoke Tests
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
     steps:
@@ -47,15 +46,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
 
-      - name: Install MCP dependencies
-        # Tenta instalar fastmcp (preferido); fallback para mcp (SDK padrão)
-        run: pip install "mcp>=1.0.0" requests httpx pydantic "pydantic-settings>=2.0.0" python-dotenv || true
-
-      - name: Install fastmcp (opcional — não bloqueia se falhar)
-        run: pip install "fastmcp>=2.0.0" || echo "fastmcp não disponível, usando mcp SDK"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
       - name: Install dev dependencies
-        run: pip install pytest pytest-asyncio
+        run: pip install pytest pytest-asyncio pytest-cov
 
       - name: Run smoke tests
         env:
@@ -75,5 +70,5 @@ jobs:
           python-version: "3.11"
 
       - name: Check syntax of all Python files
-        # Usa compileall que propaga exit code corretamente (corrige bug apontado em review)
-        run: python -m compileall src/ tests/ -q && echo "Todos os arquivos OK"
+        run: |
+          find src/ tests/ -name "*.py" -exec python -m py_compile {} \; && echo "All files OK"

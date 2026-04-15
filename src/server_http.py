@@ -15,13 +15,13 @@ Ou com uvicorn diretamente:
   uvicorn src.server_http:app --host 0.0.0.0 --port 8000
 """
 
-import os
 import sys
+import os
 
 # Adicionar o diretório pai ao path para importar o módulo server
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.server import API_KEY, WEBPOSTO_BASE_URL, logger, mcp
+from src.server import mcp, API_KEY, WEBPOSTO_BASE_URL, logger
 
 # Configurar o servidor para aceitar conexões externas
 # O FastMCP usa Settings para configurar host/port
@@ -53,7 +53,7 @@ def main():
         logger.error("Defina a variável de ambiente WEBPOSTO_API_KEY")
         logger.error("=" * 60)
         sys.exit(1)
-
+    
     logger.info("=" * 60)
     logger.info("WebPosto MCP Server - Quality Automação v1.3.0")
     logger.info("Modo: HTTP/SSE (Acesso Remoto)")
@@ -64,7 +64,7 @@ def main():
     logger.info(f"Port: {mcp.settings.port}")
     logger.info(f"Endpoint SSE: http://{mcp.settings.host}:{mcp.settings.port}/sse")
     logger.info("=" * 60)
-
+    
     # Executar em modo SSE (Server-Sent Events)
     mcp.run(transport="sse")
 

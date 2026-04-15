@@ -23,11 +23,11 @@ import os
 from typing import Any, Dict
 
 import boto3
+from botocore.exceptions import ClientError
 
 # AWS Lambda Powertools para boas práticas de observabilidade
 from aws_lambda_powertools import Logger, Tracer
 from aws_lambda_powertools.utilities.typing import LambdaContext
-from botocore.exceptions import ClientError
 
 # Importa o módulo do servidor principal. É crucial que as ferramentas
 # e o cliente HTTP já estejam definidos neste módulo.
@@ -49,7 +49,6 @@ SECRET_CACHE: Dict[str, str] = {}
 # =============================================================================
 # FUNÇÕES AUXILIARES
 # =============================================================================
-
 
 @tracer.capture_method
 def get_api_key_from_secrets_manager(secret_name: str) -> str:
@@ -89,16 +88,12 @@ def get_api_key_from_secrets_manager(secret_name: str) -> str:
         return api_key
 
     except ClientError as e:
-        logger.exception(
-            "Não foi possível obter o secret do Secrets Manager. Verifique as permissões da IAM Role e o nome do secret."
-        )
+        logger.exception("Não foi possível obter o secret do Secrets Manager. Verifique as permissões da IAM Role e o nome do secret.")
         raise e
-
 
 # =============================================================================
 # HANDLER PRINCIPAL DA LAMBDA
 # =============================================================================
-
 
 @logger.inject_lambda_context(log_event=True)
 @tracer.capture_lambda_handler

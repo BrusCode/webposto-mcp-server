@@ -13,11 +13,13 @@ IMPORTANTE: A autenticação é feita via parâmetro "chave" na query string,
 conforme documentação oficial da API WebPosto.
 """
 
+import asyncio
+import sys
 import json
 import logging
 import os
-import sys
-from typing import Any, Dict, Optional
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
 # Compatibilidade com FastMCP Cloud (pacote fastmcp) e MCP SDK (pacote mcp)
 try:
@@ -27,15 +29,25 @@ except ImportError:
 
 # Importar resources e prompts
 try:
-    from src.resources_prompts import get_prompt, read_resource
+    from src.resources_prompts import (
+        get_resources_list,
+        read_resource,
+        get_prompts_list,
+        get_prompt
+    )
 except ImportError:
-    from resources_prompts import get_prompt, read_resource  # type: ignore[no-redef]
+    from resources_prompts import (
+        get_resources_list,
+        read_resource,
+        get_prompts_list,
+        get_prompt
+    )
 
 # Configuração de logging
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    stream=sys.stderr,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stderr
 )
 logger = logging.getLogger(__name__)
 
@@ -43,18 +55,18 @@ logger = logging.getLogger(__name__)
 # CONFIGURAÇÃO DA API
 # =============================================================================
 
-WEBPOSTO_BASE_URL = os.getenv("WEBPOSTO_URL", "https://web.qualityautomacao.com.br")
-API_KEY = os.getenv("WEBPOSTO_API_KEY", "")
-DEFAULT_EMPRESA_CODIGO = os.getenv("WEBPOSTO_EMPRESA_CODIGO", "")
+WEBPOSTO_BASE_URL = os.getenv('WEBPOSTO_URL', 'https://web.qualityautomacao.com.br')
+API_KEY = os.getenv('WEBPOSTO_API_KEY', '')
+DEFAULT_EMPRESA_CODIGO = os.getenv('WEBPOSTO_EMPRESA_CODIGO', '')
 
 # =============================================================================
 # CLIENTE HTTP — importado de src/api/webposto_client.py (fonte canônica)
 # =============================================================================
 
 try:
-    from src.api.webposto_client import default_client as client
+    from src.api.webposto_client import WebPostoClient, default_client as client
 except ImportError:
-    from api.webposto_client import default_client as client  # type: ignore[no-redef]
+    from api.webposto_client import WebPostoClient, default_client as client
 
 # =============================================================================
 # SERVIDOR MCP
@@ -66,12 +78,11 @@ mcp = FastMCP("webposto-mcp")
 # RESOURCES - Documentação e Schemas
 # =============================================================================
 
-
 @mcp.resource("file:///docs/{filename}")
 def get_documentation(filename: str) -> str:
     """
     Retorna documentação do sistema webPosto.
-
+    
     Resources disponíveis:
     - GUIA_USO_APIS.md: Guia completo de uso das APIs
     - mapeamento_dependencias_apis.md: Mapeamento de dependências
@@ -80,7 +91,6 @@ def get_documentation(filename: str) -> str:
     uri = f"file:///docs/{filename}"
     return read_resource(uri)
 
-
 @mcp.resource("schema://tools")
 def get_tools_schema() -> str:
     """
@@ -88,66 +98,69 @@ def get_tools_schema() -> str:
     """
     return read_resource("schema://tools")
 
-
 # =============================================================================
 # PROMPTS - Templates Pré-configurados
 # =============================================================================
-
 
 @mcp.prompt()
 def analise_vendas(periodo: str = "últimos 30 dias", unidade_negocio: str = "todas") -> str:
     """
     Prompt para análise completa de vendas e faturamento.
-
+    
     Args:
         periodo: Período para análise (ex: 'últimos 30 dias', 'mês atual')
         unidade_negocio: Código da unidade de negócio (opcional)
     """
-    return get_prompt("analise_vendas", {"periodo": periodo, "unidade_negocio": unidade_negocio})
-
+    return get_prompt("analise_vendas", {
+        "periodo": periodo,
+        "unidade_negocio": unidade_negocio
+    })
 
 @mcp.prompt()
 def consulta_estoque(tipo_produto: str = "todos", unidade_negocio: str = "todas") -> str:
     """
     Prompt para consulta detalhada de estoque e produtos.
-
+    
     Args:
         tipo_produto: Tipo de produto (combustível, conveniência, todos)
         unidade_negocio: Código da unidade de negócio (opcional)
     """
-    return get_prompt(
-        "consulta_estoque", {"tipo_produto": tipo_produto, "unidade_negocio": unidade_negocio}
-    )
-
+    return get_prompt("consulta_estoque", {
+        "tipo_produto": tipo_produto,
+        "unidade_negocio": unidade_negocio
+    })
 
 @mcp.prompt()
 def relatorio_financeiro(periodo: str = "mês atual", tipo: str = "ambos") -> str:
     """
     Prompt para relatório financeiro completo.
-
+    
     Args:
         periodo: Período para análise (ex: 'mês atual', 'próximos 7 dias')
         tipo: Tipo de relatório (pagar, receber, ambos)
     """
-    return get_prompt("relatorio_financeiro", {"periodo": periodo, "tipo": tipo})
-
+    return get_prompt("relatorio_financeiro", {
+        "periodo": periodo,
+        "tipo": tipo
+    })
 
 @mcp.prompt()
 def analise_abastecimento(periodo: str = "últimos 7 dias", bomba_codigo: str = "todas") -> str:
     """
     Prompt para análise detalhada de abastecimentos.
-
+    
     Args:
         periodo: Período para análise
         bomba_codigo: Código da bomba (opcional, para análise específica)
     """
-    return get_prompt("analise_abastecimento", {"periodo": periodo, "bomba_codigo": bomba_codigo})
-
+    return get_prompt("analise_abastecimento", {
+        "periodo": periodo,
+        "bomba_codigo": bomba_codigo
+    })
 
 # =============================================================================
 # UTILITÁRIOS
 # =============================================================================
-
 
 def format_response(data: Any, max_records: int = 50) -> str:
     """Formata a resposta da API para exibição."""
@@ -157,48 +170,50 @@ def format_response(data: Any, max_records: int = 50) -> str:
         # Suportar formato CAM/DAD da API WebPosto (relatórios)
         # Formato 1: CAM e DAD na raiz {"CAM": [...], "DAD": [...]}
         # Formato 2: CAM e DAD dentro de CORPO {"CORPO": {"CAM": [...], "DAD": [...]}}
-
+        
         cam_dad_source = None
-
+        
         # Verificar formato 1: CAM/DAD na raiz
-        if "CAM" in data and "DAD" in data and isinstance(data["DAD"], list):
+        if 'CAM' in data and 'DAD' in data and isinstance(data['DAD'], list):
             cam_dad_source = data
         # Verificar formato 2: CAM/DAD dentro de CORPO
-        elif "CORPO" in data and isinstance(data["CORPO"], dict):
-            corpo = data["CORPO"]
-            if "CAM" in corpo and "DAD" in corpo and isinstance(corpo["DAD"], list):
+        elif 'CORPO' in data and isinstance(data['CORPO'], dict):
+            corpo = data['CORPO']
+            if 'CAM' in corpo and 'DAD' in corpo and isinstance(corpo['DAD'], list):
                 cam_dad_source = corpo
-
+        
         if cam_dad_source:
             # Combinar colunas (CAM) com dados (DAD) para criar objetos
-            colunas = cam_dad_source.get("CAM", [])
-            dados = cam_dad_source["DAD"]
+            colunas = cam_dad_source.get('CAM', [])
+            dados = cam_dad_source['DAD']
             if colunas and dados:
-                records = [dict(zip(colunas, linha)) for linha in dados]
+                records = [
+                    dict(zip(colunas, linha)) for linha in dados
+                ]
             else:
                 records = dados if dados else []
         else:
             # Formato padrão: resultados, registros ou data
-            records = data.get("resultados", data.get("registros", data.get("data", [])))
-
+            records = data.get('resultados', data.get('registros', data.get('data', [])))
+        
         if not isinstance(records, list):
             return json.dumps(data, indent=2, ensure_ascii=False)
     else:
         return str(data)
-
+    
     if not records:
         return "Nenhum registro encontrado."
-
+    
     output = [f"Total de registros: {len(records)}\n"]
     for i, record in enumerate(records[:max_records], 1):
         record_str = json.dumps(record, indent=2, ensure_ascii=False)
         if len(record_str) > 1000:
             record_str = record_str[:1000] + "..."
         output.append(f"--- Registro {i} ---\n{record_str}")
-
+    
     if len(records) > max_records:
         output.append(f"\n... e mais {len(records) - max_records} registros")
-
+    
     return "\n".join(output)
 
 
@@ -300,7 +315,7 @@ def receber_titulo_convertido(dados: Dict[str, Any]) -> str:
     Para recebimentos em dinheiro/transferência direta, use a tool padrão de
     baixa de títulos (sem conversão).
     """
-    endpoint = "/INTEGRACAO/RECEBER_TITULO_CONVERTIDO"
+    endpoint = f"/INTEGRACAO/RECEBER_TITULO_CONVERTIDO"
     params = {}
 
     result = client.put(endpoint, data=dados, params=params)
@@ -371,7 +386,7 @@ def receber_titulo(dados: Dict[str, Any]) -> str:
     - `receber_cheque` - Receber especificamente cheques
     - `receber_cartoes` - Receber especificamente cartões
     """
-    endpoint = "/INTEGRACAO/RECEBER_TITULO"
+    endpoint = f"/INTEGRACAO/RECEBER_TITULO"
     params = {}
 
     result = client.put(endpoint, data=dados, params=params)
@@ -448,7 +463,7 @@ def receber_cheque(dados: Dict[str, Any], empresa_codigo: Optional[int] = None) 
     - `receber_titulo` - Receber títulos em geral
     - `consultar_titulo_receber` - Consultar títulos
     """
-    endpoint = "/INTEGRACAO/RECEBER_CHEQUE"
+    endpoint = f"/INTEGRACAO/RECEBER_CHEQUE"
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -527,7 +542,7 @@ def receber_cartoes(dados: Dict[str, Any]) -> str:
     Para cartões de crédito parcelados, o sistema pode gerar múltiplos títulos
     a receber (um por parcela) automaticamente.
     """
-    endpoint = "/INTEGRACAO/RECEBER_CARTAO"
+    endpoint = f"/INTEGRACAO/RECEBER_CARTAO"
     params = {}
 
     result = client.put(endpoint, data=dados, params=params)
@@ -573,7 +588,7 @@ def reajustar_estoque_produto_combustivel(dados: Dict[str, Any]) -> str:
     - `consultar_produto_combustivel` (para obter produtoCodigo)
     - `consultar_tanque` (para obter tanqueCodigo)
     """
-    endpoint = "/INTEGRACAO/REAJUSTAR_ESTOQUE_PRODUTO_COMBUSTIVEL"
+    endpoint = f"/INTEGRACAO/REAJUSTAR_ESTOQUE_PRODUTO_COMBUSTIVEL"
     params = {}
 
     result = client.put(endpoint, data=dados, params=params)
@@ -755,16 +770,7 @@ def alterar_produto(id: str, dados: Dict[str, Any], empresa_codigo: Optional[int
 
 
 @mcp.tool()
-def consultar_transferencia_bancaria(
-    data_inicial: str,
-    data_final: str,
-    empresa_codigo: Optional[int] = None,
-    venda_codigo: Optional[int] = None,
-    tipo_inclusao: Optional[int] = None,
-    conta_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_transferencia_bancaria(data_inicial: str, data_final: str, empresa_codigo: Optional[int] = None, venda_codigo: Optional[int] = None, tipo_inclusao: Optional[int] = None, conta_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta transferências bancárias.**
 
@@ -836,20 +842,7 @@ def incluir_transferencia(dados: Dict[str, Any]) -> str:
 
 
 @mcp.tool()
-def consultar_titulo_receber(
-    data_inicial: str,
-    data_final: str,
-    turno: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    apenas_pendente: Optional[bool] = None,
-    codigo_duplicata: Optional[int] = None,
-    data_filtro: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    convertido: Optional[bool] = None,
-    venda_codigo: Optional[list] = None,
-) -> str:
+def consultar_titulo_receber(data_inicial: str, data_final: str, turno: Optional[int] = None, empresa_codigo: Optional[int] = None, data_hora_atualizacao: Optional[str] = None, apenas_pendente: Optional[bool] = None, codigo_duplicata: Optional[int] = None, data_filtro: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, convertido: Optional[bool] = None, venda_codigo: Optional[list] = None) -> str:
     """
     **Consulta títulos a receber (contas a receber).**
 
@@ -929,7 +922,7 @@ def consultar_titulo_receber(
         apenas_pendente=True,
         data_filtro="VENCIMENTO"
     )
-
+    
     total_vencido = sum(t["saldoPendente"] for t in vencidos)
     print(f"Total vencido: R$ {total_vencido:,.2f}")
     ```
@@ -1038,22 +1031,7 @@ def incluir_titulo_receber(dados: Dict[str, Any]) -> str:
 
 
 @mcp.tool()
-def consultar_titulo_pagar(
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    apenas_pendente: Optional[bool] = None,
-    data_filtro: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    nota_entrada_codigo: Optional[int] = None,
-    titulo_pagar_codigo: Optional[int] = None,
-    fornecedor_codigo: Optional[int] = None,
-    linha_digitavel: Optional[str] = None,
-    autorizado: Optional[bool] = None,
-    tipo_lancamento: Optional[str] = None,
-) -> str:
+def consultar_titulo_pagar(data_inicial: Optional[str] = None, data_final: Optional[str] = None, data_hora_atualizacao: Optional[str] = None, apenas_pendente: Optional[bool] = None, data_filtro: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, empresa_codigo: Optional[int] = None, nota_entrada_codigo: Optional[int] = None, titulo_pagar_codigo: Optional[int] = None, fornecedor_codigo: Optional[int] = None, linha_digitavel: Optional[str] = None, autorizado: Optional[bool] = None, tipo_lancamento: Optional[str] = None) -> str:
     """
     **Consulta títulos a pagar (contas a pagar).**
 
@@ -1131,7 +1109,7 @@ def consultar_titulo_pagar(
     import datetime
     hoje = datetime.date.today()
     proximos_7_dias = hoje + datetime.timedelta(days=7)
-
+    
     a_vencer = consultar_titulo_pagar(
         data_inicial=hoje.strftime("%Y-%m-%d"),
         data_final=proximos_7_dias.strftime("%Y-%m-%d"),
@@ -1139,7 +1117,7 @@ def consultar_titulo_pagar(
         apenas_pendente=True,
         data_filtro="VENCIMENTO"
     )
-
+    
     total_a_pagar = sum(t["saldoPendente"] for t in a_vencer)
     print(f"A pagar nos próximos 7 dias: R$ {total_a_pagar:,.2f}")
     ```
@@ -1258,7 +1236,7 @@ def consultar_revendedores() -> str:
     """consultarRevendedores - POST /INTEGRACAO/REVENDEDORES_ANP"""
     params = {}
 
-    result = client.post("/INTEGRACAO/REVENDEDORES_ANP", data={}, params=params)
+    result = client.post("/INTEGRACAO/REVENDEDORES_ANP", data=dados, params=params)
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
@@ -1353,13 +1331,13 @@ def reajustar_produto(dados: Dict[str, Any]) -> str:
         empresa_codigo=7,
         limite=100
     )
-
+    
     # Aplicar reajuste de 10% em todos
     produtos_reajuste = [
         {"produtoCodigo": p["codigo"], "percentualReajuste": 10.0}
         for p in produtos_categoria
     ]
-
+    
     reajustar_produto(
         dados={
             "empresaCodigo": 7,
@@ -1556,7 +1534,7 @@ def incluir_produto_comissao(dados: Dict[str, Any]) -> str:
         grupo_codigo=5,  # Lubrificantes
         empresa_codigo=7
     )
-
+    
     for produto in produtos:
         incluir_produto_comissao(
             dados={
@@ -1600,24 +1578,24 @@ def incluir_produto_comissao(dados: Dict[str, Any]) -> str:
 def incluir_prazo_tabela_preco_item(id: str, dados: Dict[str, Any]) -> str:
     """
     **Inclui item em tabela de preços com prazo.**
-
+    
     Adiciona produto a uma tabela de preços específica com condições de prazo,
     permitindo preços diferenciados por forma de pagamento.
-
+    
     **Quando usar:**
     - Configurar preços por prazo de pagamento
     - Criar promoções com condições especiais
     - Gestão de tabelas de preço
-
+    
     **Parâmetros:**
     - `id` (str, obrigatório): ID da tabela de preços
     - `dados` (dict, obrigatório): Dados do item (produto, preço, prazo)
-
+    
     **Exemplo:**
     ```python
     incluir_prazo_tabela_preco_item(id='123', dados={'produto_codigo': 10, 'preco': 5.50})
     ```
-
+    
     **Tools Relacionadas:** `excluir_prazo_tabela_preco_item`, `tabela_preco_prazo`
     """
     params = {}
@@ -1632,23 +1610,23 @@ def incluir_prazo_tabela_preco_item(id: str, dados: Dict[str, Any]) -> str:
 def pedido_compra(dados: Dict[str, Any]) -> str:
     """
     **Cria pedido de compra para fornecedor.**
-
+    
     Registra solicitação de compra de mercadorias, iniciando o ciclo de
     aquisição e controle de estoque.
-
+    
     **Quando usar:**
     - Solicitar compra de produtos
     - Controle de pedidos a fornecedores
     - Planejamento de estoque
-
+    
     **Parâmetros:**
     - `dados` (dict, obrigatório): Dados do pedido (fornecedor, produtos, quantidades)
-
+    
     **Exemplo:**
     ```python
     pedido_compra(dados={'fornecedor_codigo': 10, 'itens': [{'produto': 1, 'qtd': 100}]})
     ```
-
+    
     **Tools Relacionadas:** `consultar_compra`, `consultar_trr_pedido`
     """
     params = {}
@@ -1660,18 +1638,7 @@ def pedido_compra(dados: Dict[str, Any]) -> str:
 
 
 @mcp.tool()
-def consultar_cliente(
-    cliente_codigo_externo: Optional[str] = None,
-    cliente_codigo: Optional[list] = None,
-    empresa_codigo: Optional[int] = None,
-    retorna_observacoes: Optional[bool] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    frota: Optional[bool] = None,
-    faturamento: Optional[bool] = None,
-    limites_bloqueios: Optional[bool] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_cliente(cliente_codigo_externo: Optional[str] = None, cliente_codigo: Optional[list] = None, empresa_codigo: Optional[int] = None, retorna_observacoes: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, frota: Optional[bool] = None, faturamento: Optional[bool] = None, limites_bloqueios: Optional[bool] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta clientes cadastrados no sistema.**
 
@@ -1752,7 +1719,7 @@ def consultar_cliente(
         limites_bloqueios=True,
         faturamento=True
     )
-
+    
     if validacao[0]["bloqueado"]:
         print("Cliente bloqueado! Venda não permitida.")
     elif validacao[0]["limiteDisponivel"] < valor_venda:
@@ -1938,17 +1905,7 @@ def incluir_cliente_1(dados: Dict[str, Any]) -> str:
 
 
 @mcp.tool()
-def consultar_movimento_conta(
-    empresa_codigo: Optional[int] = None,
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    mostra_saldo: Optional[bool] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    documento_origem_codigo: Optional[int] = None,
-    tipo_documento_origem: Optional[str] = None,
-) -> str:
+def consultar_movimento_conta(empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, mostra_saldo: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, documento_origem_codigo: Optional[int] = None, tipo_documento_origem: Optional[str] = None) -> str:
     """
     **Consulta movimentações de contas bancárias.**
 
@@ -2031,14 +1988,7 @@ def incluir_movimento_conta(dados: Dict[str, Any]) -> str:
 
 
 @mcp.tool()
-def consultar_lancamento_contabil(
-    data_inicial: str,
-    data_final: str,
-    empresa_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    lote_contabil: Optional[int] = None,
-) -> str:
+def consultar_lancamento_contabil(data_inicial: str, data_final: str, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, lote_contabil: Optional[int] = None) -> str:
     """
     **Consulta lançamentos contábeis.**
 
@@ -2164,12 +2114,7 @@ def incluir_ofx(dados: Dict[str, Any]) -> str:
 
 
 @mcp.tool()
-def consultar_grupo_cliente(
-    grupo_codigo: Optional[int] = None,
-    grupo_codigo_externo: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_grupo_cliente(grupo_codigo: Optional[int] = None, grupo_codigo_externo: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta grupos de clientes cadastrados.**
 
@@ -2226,17 +2171,8 @@ def incluir_cliente_grupo(dados: Dict[str, Any]) -> str:
 
 
 @mcp.tool()
-def envio_whata_app(dados: Dict[str, Any]) -> str:
-    """
-    **Envia mensagem via WhatsApp.**
-
-    Dispara envio de WhatsApp para clientes ou contatos cadastrados no webPosto.
-
-    **Parâmetros (via objeto `dados`):**
-    - `destinatario` (str, obrigatório): Número de telefone ou código do cliente
-    - `mensagem` (str, obrigatório): Texto da mensagem a enviar
-    - `empresa_codigo` (int, opcional): Código da empresa remetente
-    """
+def envio_whata_app() -> str:
+    """envioWhataApp - POST /INTEGRACAO/ENVIO_WHATSAPP"""
     params = {}
 
     result = client.post("/INTEGRACAO/ENVIO_WHATSAPP", data=dados, params=params)
@@ -2246,18 +2182,8 @@ def envio_whata_app(dados: Dict[str, Any]) -> str:
 
 
 @mcp.tool()
-def envio_email(dados: Dict[str, Any]) -> str:
-    """
-    **Envia e-mail.**
-
-    Dispara envio de e-mail para clientes ou contatos cadastrados no webPosto.
-
-    **Parâmetros (via objeto `dados`):**
-    - `destinatario` (str, obrigatório): Endereço de e-mail ou código do cliente
-    - `assunto` (str, obrigatório): Assunto do e-mail
-    - `mensagem` (str, obrigatório): Corpo do e-mail
-    - `empresa_codigo` (int, opcional): Código da empresa remetente
-    """
+def envio_email() -> str:
+    """envioEmail - POST /INTEGRACAO/ENVIO_EMAIL"""
     params = {}
 
     result = client.post("/INTEGRACAO/ENVIO_EMAIL", data=dados, params=params)
@@ -2289,18 +2215,7 @@ def incluir_cliente_prazo(codigo_cliente: str, dados: Dict[str, Any]) -> str:
 
 
 @mcp.tool()
-def consultar_cartao(
-    data_inicial: str,
-    data_final: str,
-    turno: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    apenas_pendente: Optional[bool] = None,
-    data_filtro: Optional[str] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    venda_codigo: Optional[list] = None,
-) -> str:
+def consultar_cartao(data_inicial: str, data_final: str, turno: Optional[int] = None, empresa_codigo: Optional[int] = None, apenas_pendente: Optional[bool] = None, data_filtro: Optional[str] = None, data_hora_atualizacao: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, venda_codigo: Optional[list] = None) -> str:
     """
     **Consulta transações de cartões (crédito/débito).**
 
@@ -2381,7 +2296,7 @@ def consultar_cartao(
         empresa_codigo=7,
         limite=500
     )
-
+    
     total_vendas = sum(c["valorTransacao"] for c in cartoes_mes)
     total_taxas = sum(c["taxaAdministradora"] for c in cartoes_mes)
     total_liquido = sum(c["valorLiquido"] for c in cartoes_mes)
@@ -2390,7 +2305,7 @@ def consultar_cartao(
     import datetime
     hoje = datetime.date.today()
     proximos_30_dias = hoje + datetime.timedelta(days=30)
-
+    
     a_receber = consultar_cartao(
         data_inicial=hoje.strftime("%Y-%m-%d"),
         data_final=proximos_30_dias.strftime("%Y-%m-%d"),
@@ -2477,41 +2392,41 @@ def autoriza_pagamento_abastecimento(dados: Dict[str, Any]) -> str:
 def autorizar_nfe(nota_codigo: str) -> str:
     """
     **Autoriza a emissão de uma Nota Fiscal Eletrônica (NFe) de saída.**
-
+    
     Esta tool envia uma NFe para autorização junto à SEFAZ. Após a autorização,
     a nota fiscal é validada e pode ser transmitida ao destinatário.
-
+    
     **Quando usar:**
     - Para autorizar NFe de vendas
     - Para emissão de notas fiscais eletrônicas
     - Para compliance com legislação fiscal
     - Para integrações com SEFAZ
-
+    
     **Fluxo de Autorização:**
     1. Nota criada no sistema
     2. Validação de dados
     3. Envio para SEFAZ
     4. Aguardar retorno
     5. Processar autorização ou rejeição
-
+    
     **Parâmetros:**
     - `nota_codigo` (str, obrigatório): Código da nota a ser autorizada.
-
+    
     **Exemplo de Uso (Python):**
     ```python
     # Autorizar uma NFe
     resultado = autorizar_nfe(nota_codigo="12345")
-
+    
     if resultado["autorizada"]:
         print(f"NFe autorizada! Chave: {resultado['chave']}")
     else:
         print(f"Erro: {resultado['mensagem']}")
     ```
-
+    
     **Tools Relacionadas:**
     - `consultar_nota_manifestacao` - Consultar manifestações
     - `consultar_icms` - Configurações tributárias
-
+    
     **Observações:**
     - Operação pode demorar alguns segundos (aguardar resposta da SEFAZ)
     - Valide todos os dados antes de autorizar
@@ -2519,7 +2434,7 @@ def autorizar_nfe(nota_codigo: str) -> str:
     """
     params = {}
 
-    result = client.post(f"/INTEGRACAO/AUTORIZAR_NFE_SAIDA/{nota_codigo}", data={}, params=params)
+    result = client.post("/INTEGRACAO/AUTORIZAR_NFE_SAIDA/{notaCodigo}", data=dados, params=params)
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
@@ -2582,7 +2497,7 @@ def alterar_preco_combustivel(dados: Dict[str, Any]) -> str:
     # Cenário 2: Alterar preços de múltiplos combustíveis
     import datetime
     agora = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
+    
     alterar_preco_combustivel(
         dados={
             "empresaCodigo": 7,
@@ -2600,7 +2515,7 @@ def alterar_preco_combustivel(dados: Dict[str, Any]) -> str:
     # Cenário 3: Integração com sistema de preços
     # Buscar combustíveis
     combustiveis = consultar_produto_combustivel(empresa_codigo=7)
-
+    
     # Aplicar reajuste de 3% em todos
     produtos_reajuste = [
         {
@@ -2609,7 +2524,7 @@ def alterar_preco_combustivel(dados: Dict[str, Any]) -> str:
         }
         for c in combustiveis
     ]
-
+    
     alterar_preco_combustivel(
         dados={
             "empresaCodigo": 7,
@@ -2769,7 +2684,7 @@ def pagar_titulo_pagar(dados: Dict[str, Any]) -> str:
     Para pagamentos em lote, consulte primeiro os títulos pendentes com
     `consultar_titulo_pagar(apenas_pendente=True)` e depois processe cada um.
     """
-    endpoint = "/INTEGRACAO/TITULO_PAGAR/PAGAR"
+    endpoint = f"/INTEGRACAO/TITULO_PAGAR/PAGAR"
     params = {}
 
     result = client.put(endpoint, data=dados, params=params)
@@ -2803,12 +2718,7 @@ def alterar_cartao(id: str, dados: Dict[str, Any]) -> str:
 
 
 @mcp.tool()
-def venda_resumo(
-    empresa_codigo: Optional[list] = None,
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    situacao: Optional[str] = None,
-) -> str:
+def venda_resumo(empresa_codigo: Optional[list] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, situacao: Optional[str] = None) -> str:
     """
     **Consulta resumo agregado de vendas por empresa.**
 
@@ -2902,13 +2812,7 @@ def venda_resumo(
 
 
 @mcp.tool()
-def consultar_item_fidelidade(
-    venda_item_voucher_codigo: Optional[int] = None,
-    venda_item_codigo: Optional[list] = None,
-    tipo_integracao_voucher: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_item_fidelidade(venda_item_voucher_codigo: Optional[int] = None, venda_item_codigo: Optional[list] = None, tipo_integracao_voucher: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """consultarItemFidelidade - GET /INTEGRACAO/VENDA_ITEM_FIDELIDADE"""
     params = {}
     if venda_item_voucher_codigo is not None:
@@ -2928,16 +2832,7 @@ def consultar_item_fidelidade(
 
 
 @mcp.tool()
-def consultar_venda_item(
-    empresa_codigo: Optional[int] = None,
-    usa_produto_lmc: Optional[bool] = None,
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    tipo_data: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    venda_codigo: Optional[list] = None,
-) -> str:
+def consultar_venda_item(empresa_codigo: Optional[int] = None, usa_produto_lmc: Optional[bool] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, venda_codigo: Optional[list] = None) -> str:
     """
     **Consulta itens individuais de vendas.**
 
@@ -3010,7 +2905,7 @@ def consultar_venda_item(
         empresa_codigo=7
     )
     venda_ids = [v["codigo"] for v in vendas[:5]]  # Primeiras 5 vendas
-
+    
     # Depois, obter itens dessas vendas
     itens = consultar_venda_item(
         venda_codigo=venda_ids,
@@ -3023,16 +2918,16 @@ def consultar_venda_item(
         data_final="2025-01-31",
         empresa_codigo=7
     )
-
+    
     # Agrupar por produto
     from collections import defaultdict
     vendas_por_produto = defaultdict(lambda: {"quantidade": 0, "valor": 0})
-
+    
     for item in itens:
         produto = item["produtoDescricao"]
         vendas_por_produto[produto]["quantidade"] += item["quantidade"]
         vendas_por_produto[produto]["valor"] += item["valorTotal"]
-
+    
     # Ordenar por quantidade
     top_produtos = sorted(
         vendas_por_produto.items(),
@@ -3078,19 +2973,7 @@ def consultar_venda_item(
 
 
 @mcp.tool()
-def consultar_venda_forma_pagamento(
-    turno: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    modelo_documento: Optional[str] = None,
-    tipo_data: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    venda_codigo: Optional[list] = None,
-    situacao: Optional[str] = None,
-    vendas_com_dfe: Optional[bool] = None,
-) -> str:
+def consultar_venda_forma_pagamento(turno: Optional[int] = None, empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, modelo_documento: Optional[str] = None, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, venda_codigo: Optional[list] = None, situacao: Optional[str] = None, vendas_com_dfe: Optional[bool] = None) -> str:
     """
     **Consulta formas de pagamento usadas em vendas.**
 
@@ -3135,19 +3018,7 @@ def consultar_venda_forma_pagamento(
 
 
 @mcp.tool()
-def consultar_venda(
-    turno: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    modelo_documento: Optional[str] = None,
-    tipo_data: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    venda_codigo: Optional[list] = None,
-    situacao: Optional[str] = None,
-    vendas_com_dfe: Optional[bool] = None,
-) -> str:
+def consultar_venda(turno: Optional[int] = None, empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, modelo_documento: Optional[str] = None, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, venda_codigo: Optional[list] = None, situacao: Optional[str] = None, vendas_com_dfe: Optional[bool] = None) -> str:
     """
     **Consulta vendas realizadas no período especificado.**
 
@@ -3348,17 +3219,17 @@ def consultar_venda_completa(id_list: str, vendas_com_dfe: Optional[bool] = None
         data_final="2025-01-10",
         empresa_codigo=7
     )
-
+    
     # Pegar IDs das vendas
     ids = [str(v["codigo"]) for v in vendas_resumo]
     ids_str = ",".join(ids)
-
+    
     # Consultar detalhes completos
     vendas_completas = consultar_venda_completa(
         id_list=ids_str,
         vendas_com_dfe=True
     )
-
+    
     # Analisar detalhes
     for venda in vendas_completas:
         print(f"Venda {venda['codigo']}:")
@@ -3373,7 +3244,7 @@ def consultar_venda_completa(id_list: str, vendas_com_dfe: Optional[bool] = None
         id_list="12345",
         vendas_com_dfe=True
     )[0]
-
+    
     if venda.get("nfce"):
         print(f"NFCe: {venda['nfce']['numero']}")
         print(f"Chave: {venda['nfce']['chave']}")
@@ -3407,17 +3278,7 @@ def consultar_venda_completa(id_list: str, vendas_com_dfe: Optional[bool] = None
 
 
 @mcp.tool()
-def consultar_vale_funcionario(
-    data_inicial: str,
-    data_final: str,
-    empresa_codigo: Optional[list] = None,
-    venda_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    quitado: Optional[bool] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    origem: Optional[str] = None,
-) -> str:
+def consultar_vale_funcionario(data_inicial: str, data_final: str, empresa_codigo: Optional[list] = None, venda_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, quitado: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, origem: Optional[str] = None) -> str:
     """consultarValeFuncionario - GET /INTEGRACAO/VALE_FUNCIONARIO"""
     params = {}
     if empresa_codigo is not None:
@@ -3445,28 +3306,26 @@ def consultar_vale_funcionario(
 
 
 @mcp.tool()
-def consultar_usuario_empresa(
-    ultimo_codigo: Optional[int] = None, limite: Optional[int] = None
-) -> str:
+def consultar_usuario_empresa(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta vínculos de usuários com empresas.**
-
+    
     Retorna relacionamento entre usuários e unidades de negócio (multi-tenant),
     definindo quais empresas cada usuário pode acessar.
-
+    
     **Quando usar:**
     - Configurar acessos multi-tenant
     - Gestão de permissões por unidade
     - Auditoria de acessos
-
+    
     **Parâmetros:**
     - `ultimo_codigo`, `limite` (int, opcional): Paginação
-
+    
     **Exemplo:**
     ```python
     vinculos = consultar_usuario_empresa(limite=100)
     ```
-
+    
     **Tools Relacionadas:** `consultar_usuario`, `consultar_empresa`
     """
     params = {}
@@ -3484,23 +3343,23 @@ def consultar_usuario_empresa(
 def consultar_usuario(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta usuários do sistema.**
-
+    
     Retorna lista de usuários cadastrados com permissões e acessos ao sistema,
     essencial para gestão de segurança e controle de acesso.
-
+    
     **Quando usar:**
     - Gestão de usuários e permissões
     - Auditoria de acessos
     - Controle de segurança
-
+    
     **Parâmetros:**
     - `ultimo_codigo`, `limite` (int, opcional): Paginação
-
+    
     **Exemplo:**
     ```python
     usuarios = consultar_usuario(limite=100)
     ```
-
+    
     **Tools Relacionadas:** `consultar_usuario_empresa`, `consultar_funcionario`
     """
     params = {}
@@ -3515,36 +3374,28 @@ def consultar_usuario(ultimo_codigo: Optional[int] = None, limite: Optional[int]
 
 
 @mcp.tool()
-def troca_preco(
-    data_inicial: str,
-    data_final: str,
-    realizada: Optional[bool] = None,
-    tipo_produto: Optional[str] = None,
-    empresa_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def troca_preco(data_inicial: str, data_final: str, realizada: Optional[bool] = None, tipo_produto: Optional[str] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta reajustes de preços em lote.**
-
+    
     Retorna histórico de operações de reajuste de preços realizadas em lote,
     permitindo auditoria e controle de políticas de precificação.
-
+    
     **Quando usar:**
     - Auditoria de reajustes de preços
     - Acompanhar políticas de precificação
     - Relatórios de gestão comercial
-
+    
     **Parâmetros:**
     - `data_inicial`, `data_final` (str, obrigatório): Período (YYYY-MM-DD)
     - `realizada` (bool, opcional): Filtrar por status de execução
     - `tipo_produto` (str, opcional): Filtrar por tipo (C=Combustível, etc.)
-
+    
     **Exemplo:**
     ```python
     reajustes = troca_preco(data_inicial='2025-01-01', data_final='2025-01-31', realizada=True)
     ```
-
+    
     **Tools Relacionadas:** `reajustar_produto`, `alterar_preco_combustivel`
     """
     params = {}
@@ -3569,12 +3420,7 @@ def troca_preco(
 
 
 @mcp.tool()
-def consultar_tanque(
-    tanque_codigo: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_tanque(tanque_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta tanques de armazenamento de combustível.**
 
@@ -3638,7 +3484,7 @@ def consultar_tanque(
         nivel = tanque["nivelAtual"]
         capacidade = tanque["capacidadeTotal"]
         percentual = (nivel / capacidade) * 100
-
+        
         if percentual < 20:
             print(f"ALERTA: {produto} com apenas {percentual:.1f}% de capacidade")
 
@@ -3678,31 +3524,27 @@ def consultar_tanque(
 
 
 @mcp.tool()
-def tabela_preco_prazo(
-    tabela_preco_prazo_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def tabela_preco_prazo(tabela_preco_prazo_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta tabelas de preços com prazo.**
-
+    
     Retorna configurações de tabelas de preços diferenciados por prazo
     de pagamento (à vista, 7 dias, 15 dias, etc.).
-
+    
     **Quando usar:**
     - Listar tabelas de preço ativas
     - Consultar políticas comerciais
     - Gestão de promoções
-
+    
     **Parâmetros:**
     - `tabela_preco_prazo_codigo` (int, opcional): Código específico
     - `ultimo_codigo`, `limite` (int, opcional): Paginação
-
+    
     **Exemplo:**
     ```python
     tabelas = tabela_preco_prazo(limite=50)
     ```
-
+    
     **Tools Relacionadas:** `incluir_prazo_tabela_preco_item`, `excluir_prazo_tabela_preco_item`
     """
     params = {}
@@ -3719,17 +3561,7 @@ def tabela_preco_prazo(
 
 
 @mcp.tool()
-def consultar_sat(
-    data_inicial: str,
-    data_final: str,
-    empresa_codigo: Optional[list] = None,
-    venda_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    quitado: Optional[bool] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    origem: Optional[str] = None,
-) -> str:
+def consultar_sat(data_inicial: str, data_final: str, empresa_codigo: Optional[list] = None, venda_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, quitado: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, origem: Optional[str] = None) -> str:
     """
     **Consulta cupons SAT (Sistema Autenticador e Transmissor).**
 
@@ -3770,16 +3602,7 @@ def consultar_sat(
 
 
 @mcp.tool()
-def sangria_caixa(
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    empresa_codigo: Optional[int] = None,
-    caixa_codigo: Optional[int] = None,
-    funcionario_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def sangria_caixa(data_inicial: Optional[str] = None, data_final: Optional[str] = None, data_hora_atualizacao: Optional[str] = None, empresa_codigo: Optional[int] = None, caixa_codigo: Optional[int] = None, funcionario_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta sangrias de caixa.**
 
@@ -3818,9 +3641,7 @@ def sangria_caixa(
 
 
 @mcp.tool()
-def listar_relatorios_personalizados(
-    ultimo_codigo: Optional[int] = None, limite: Optional[int] = None
-) -> str:
+def listar_relatorios_personalizados(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Lista os relatórios personalizados configurados no sistema.**
 
@@ -3870,32 +3691,28 @@ def listar_relatorios_personalizados(
 
 
 @mcp.tool()
-def consultar_produto_meta(
-    grupo_meta_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_produto_meta(grupo_meta_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta metas de vendas por produto.**
-
+    
     Retorna configurações de metas comerciais definidas para produtos específicos,
     permitindo acompanhamento de desempenho e gestão de incentivos.
-
+    
     **Quando usar:**
     - Acompanhar progresso de metas de vendas
     - Avaliar performance de produtos
     - Gestão de comissões e bonificações
     - Planejamento comercial
-
+    
     **Parâmetros:**
     - `grupo_meta_codigo` (int, opcional): Código do grupo de metas
     - `ultimo_codigo`, `limite` (int, opcional): Paginação
-
+    
     **Exemplo:**
     ```python
     metas = consultar_produto_meta(grupo_meta_codigo=10, limite=50)
     ```
-
+    
     **Tools Relacionadas:** `consultar_funcionario_meta`, `consultar_grupo_meta`
     """
     params = {}
@@ -3915,23 +3732,23 @@ def consultar_produto_meta(
 def consultar_produto_lmc_lmp(codigo_produt_lmc: Optional[int] = None) -> str:
     """
     **Consulta análise de rentabilidade (LMC/LMP) por produto.**
-
+    
     Retorna Lucro Máximo de Contribuição (LMC) e Lucro Máximo de Produção (LMP)
     para análise de rentabilidade e precificação estratégica.
-
+    
     **Quando usar:**
     - Análise de rentabilidade por produto
     - Definição de preços estratégicos
     - Avaliação de margem de contribuição
-
+    
     **Parâmetros:**
     - `codigo_produt_lmc` (int, opcional): Código do produto para análise
-
+    
     **Exemplo:**
     ```python
     analise = consultar_produto_lmc_lmp(codigo_produt_lmc=100)
     ```
-
+    
     **Tools Relacionadas:** `consultar_produto`, `consultar_lmc`
     """
     params = {}
@@ -3944,12 +3761,7 @@ def consultar_produto_lmc_lmp(codigo_produt_lmc: Optional[int] = None) -> str:
 
 
 @mcp.tool()
-def consultar_produto_estoque(
-    empresa_codigo: int,
-    data_hora: Optional[str] = None,
-    grupo_codigo: Optional[list] = None,
-    produto_codigo: Optional[list] = None,
-) -> str:
+def consultar_produto_estoque(empresa_codigo: int, data_hora: Optional[str] = None, grupo_codigo: Optional[list] = None, produto_codigo: Optional[list] = None) -> str:
     """
     **Consulta estoque de produtos.**
 
@@ -4000,7 +3812,7 @@ def consultar_produto_estoque(
         p for p in estoque
         if p["quantidadeEstoque"] < p["estoqueMinimo"]
     ]
-
+    
     for produto in estoque_baixo:
         print(f"ALERTA: {produto['descricao']} - Estoque: {produto['quantidadeEstoque']}")
     ```
@@ -4034,12 +3846,7 @@ def consultar_produto_estoque(
 
 
 @mcp.tool()
-def consultar_produto_empresa(
-    data_hora_atualizacao: Optional[str] = None,
-    usa_produto_lmc: Optional[bool] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_produto_empresa(data_hora_atualizacao: Optional[str] = None, usa_produto_lmc: Optional[bool] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """consultarProdutoEmpresa - GET /INTEGRACAO/PRODUTO_EMPRESA"""
     params = {}
     if data_hora_atualizacao is not None:
@@ -4057,15 +3864,7 @@ def consultar_produto_empresa(
 
 
 @mcp.tool()
-def consultar_produto(
-    empresa_codigo: Optional[int] = None,
-    produto_codigo: Optional[int] = None,
-    produto_codigo_externo: Optional[str] = None,
-    grupo_codigo: Optional[int] = None,
-    usa_produto_lmc: Optional[bool] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_produto(empresa_codigo: Optional[int] = None, produto_codigo: Optional[int] = None, produto_codigo_externo: Optional[str] = None, grupo_codigo: Optional[int] = None, usa_produto_lmc: Optional[bool] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta produtos cadastrados no sistema.**
 
@@ -4196,9 +3995,7 @@ def consultar_produto(
 
 
 @mcp.tool()
-def consultar_prazos(
-    prazo_codigo: Optional[int] = None, prazo_codigo_externo: Optional[str] = None
-) -> str:
+def consultar_prazos(prazo_codigo: Optional[int] = None, prazo_codigo_externo: Optional[str] = None) -> str:
     """
     **Consulta prazos de pagamento cadastrados.**
 
@@ -4231,11 +4028,7 @@ def consultar_prazos(
 
 
 @mcp.tool()
-def consultar_plano_conta_gerencial(
-    plano_conta_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_plano_conta_gerencial(plano_conta_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta plano de contas gerencial.**
 
@@ -4270,9 +4063,7 @@ def consultar_plano_conta_gerencial(
 
 
 @mcp.tool()
-def consultar_plano_conta_contabil(
-    ultimo_codigo: Optional[int] = None, limite: Optional[int] = None
-) -> str:
+def consultar_plano_conta_contabil(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta plano de contas contábil.**
 
@@ -4307,11 +4098,11 @@ def consultar_plano_conta_contabil(
 def consultar_placares(data_inicial: str, data_final: str) -> str:
     """
     **Consulta placares de performance e rankings para gamificação e motivação.**
-
+    
     Esta tool fornece dados de placares e rankings de performance, permitindo criar
     sistemas de gamificação para motivação de equipes. Placares podem incluir rankings
     de vendas, metas atingidas, produtividade e outros indicadores de performance.
-
+    
     **Quando usar:**
     - Para criar sistemas de gamificação e motivação de equipes
     - Para exibir rankings de performance em TVs e monitores
@@ -4319,27 +4110,27 @@ def consultar_placares(data_inicial: str, data_final: str) -> str:
     - Para acompanhamento de metas e reconhecimento de desempenho
     - Para dashboards de performance em tempo real
     - Para relatórios de produtividade
-
+    
     **Conceito de Placares:**
     Placares são rankings dinâmicos que mostram a performance de funcionários, filiais
     ou produtos em relação a indicadores específicos. Eles promovem competição saudável
     e reconhecimento de desempenho.
-
+    
     **Fluxo de Uso Essencial:**
     1. **Defina o Período:** Determine datas inicial e final para o placar.
     2. **Execute a Consulta:** Chame `consultar_placares` com as datas.
     3. **Exiba os Resultados:** Apresente rankings em dashboards ou TVs.
     4. **Atualize Periodicamente:** Mantenha placares atualizados para engajamento.
-
+    
     **Parâmetros:**
     - `data_inicial` (str, obrigatório): Data de início do período do placar.
       Formato: "YYYY-MM-DD"
       Exemplo: "2025-01-01"
-
+    
     - `data_final` (str, obrigatório): Data de fim do período do placar.
       Formato: "YYYY-MM-DD"
       Exemplo: "2025-01-31"
-
+    
     **Retorno:**
     Placares de performance contendo:
     - Rankings de vendas por funcionário
@@ -4349,7 +4140,7 @@ def consultar_placares(data_inicial: str, data_final: str) -> str:
     - Indicadores de performance (ticket médio, volume, etc)
     - Posições no ranking
     - Pontuações e badges (se configurado)
-
+    
     **Exemplo de Uso (Python):**
     ```python
     # Cenário 1: Placar mensal de vendas
@@ -4358,30 +4149,30 @@ def consultar_placares(data_inicial: str, data_final: str) -> str:
         data_final="2025-01-31"
     )
     print("Top 10 vendedores:", placar_janeiro["ranking_vendedores"][:10])
-
+    
     # Cenário 2: Placar semanal para competição
     placar_semanal = consultar_placares(
         data_inicial="2025-01-06",
         data_final="2025-01-12"
     )
-
+    
     # Exibir top 3
     top3 = placar_semanal["ranking_vendedores"][:3]
     for i, vendedor in enumerate(top3, 1):
         print(f"{i}º lugar: {vendedor['nome']} - R$ {vendedor['total_vendas']:,.2f}")
-
+    
     # Cenário 3: Dashboard de gamificação em tempo real
     # Atualizar placar a cada hora
     import datetime
-
+    
     hoje = datetime.date.today()
     inicio_mes = hoje.replace(day=1)
-
+    
     placar_atual = consultar_placares(
         data_inicial=str(inicio_mes),
         data_final=str(hoje)
     )
-
+    
     # Exibir em dashboard
     dashboard_gamificacao = {
         "periodo": f"{inicio_mes} a {hoje}",
@@ -4389,59 +4180,59 @@ def consultar_placares(data_inicial: str, data_final: str) -> str:
         "top_filiais": placar_atual["ranking_filiais"][:5],
         "metas_atingidas": placar_atual["metas_atingidas"]
     }
-
+    
     # Cenário 4: Comparação de performance entre períodos
     placar_mes_atual = consultar_placares(
         data_inicial="2025-01-01",
         data_final="2025-01-31"
     )
-
+    
     placar_mes_anterior = consultar_placares(
         data_inicial="2024-12-01",
         data_final="2024-12-31"
     )
-
+    
     # Identificar vendedores que melhoraram posição
     for vendedor in placar_mes_atual["ranking_vendedores"]:
         pos_atual = vendedor["posicao"]
         pos_anterior = next(
-            (v["posicao"] for v in placar_mes_anterior["ranking_vendedores"]
-             if v["codigo"] == vendedor["codigo"]),
+            (v["posicao"] for v in placar_mes_anterior["ranking_vendedores"] 
+             if v["codigo"] == vendedor["codigo"]), 
             None
         )
         if pos_anterior and pos_atual < pos_anterior:
             print(f"{vendedor['nome']} subiu {pos_anterior - pos_atual} posições!")
     ```
-
+    
     **Dicas de Gamificação:**
     - **Atualização Frequente:** Atualize placares regularmente (diário ou hora a hora)
       para manter engajamento.
-
+    
     - **Reconhecimento Público:** Exiba placares em locais visíveis (TVs, murais)
       para reconhecimento e motivação.
-
+    
     - **Múltiplos Rankings:** Crie rankings por diferentes métricas (volume, ticket
       médio, satisfação) para valorizar diferentes competências.
-
+    
     - **Metas Alcançáveis:** Defina metas desafiadoras mas alcançáveis para manter
       motivação.
-
+    
     - **Prêmios e Reconhecimento:** Associe placares a prêmios, badges ou
       reconhecimentos para aumentar engajamento.
-
+    
     **Casos de Uso Estratégicos:**
     - **Competições de Vendas:** Criar competições mensais ou trimestrais.
     - **Motivação de Equipes:** Usar rankings para motivar e engajar funcionários.
     - **Identificação de Talentos:** Identificar vendedores de alto desempenho.
     - **Benchmarking:** Comparar performance entre filiais.
     - **Cultura de Performance:** Criar cultura focada em resultados e melhoria contínua.
-
+    
     **Tools Relacionadas:**
     - `produtividade_funcionario` - Análise detalhada de produtividade
     - `vendas_periodo` - Detalhamento de vendas
     - `consultar_funcionario_meta` - Metas de funcionários
     - `consultar_relatorio_mapa` - Mapa de desempenho
-
+    
     **Observações Importantes:**
     - Placares devem ser usados para motivação positiva, não punitiva.
     - Considere criar rankings por categorias (junior, pleno, sênior) para justiça.
@@ -4463,11 +4254,11 @@ def consultar_placares(data_inicial: str, data_final: str) -> str:
 def consultar_pisconfins(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta configurações de PIS e COFINS para compliance tributário federal.**
-
+    
     Esta tool fornece acesso às configurações de PIS (Programa de Integração Social) e
     COFINS (Contribuição para Financiamento da Seguridade Social) cadastradas no sistema.
     Essencial para cálculo correto de tributos federais e compliance fiscal.
-
+    
     **Quando usar:**
     - Para consultar alíquotas de PIS e COFINS
     - Para validação de cálculos tributários federais
@@ -4475,15 +4266,15 @@ def consultar_pisconfins(ultimo_codigo: Optional[int] = None, limite: Optional[i
     - Para apuração de impostos
     - Para compliance com legislação federal
     - Para integrações contábeis
-
+    
     **Conceito de PIS/COFINS:**
     PIS e COFINS são contribuições federais calculadas sobre o faturamento.
     Podem ser apuradas em regime cumulativo ou não-cumulativo, com alíquotas diferentes.
-
+    
     **Parâmetros:**
     - `ultimo_codigo` (int, opcional): Para paginação.
     - `limite` (int, opcional): Número máximo de registros (default: 100).
-
+    
     **Retorno:**
     Configurações de PIS/COFINS contendo:
     - Alíquotas de PIS
@@ -4492,24 +4283,24 @@ def consultar_pisconfins(ultimo_codigo: Optional[int] = None, limite: Optional[i
     - Regime de apuração (cumulativo/não-cumulativo)
     - Base de cálculo
     - Isenções e benefícios fiscais
-
+    
     **Exemplo de Uso (Python):**
     ```python
     # Listar configurações de PIS/COFINS
     pis_cofins = consultar_pisconfins(limite=200)
-
+    
     # Calcular PIS/COFINS sobre uma venda
     valor_venda = 1000.00
     config = pis_cofins[0]  # Primeira configuração
-
+    
     pis = valor_venda * (config["aliquotaPIS"] / 100)
     cofins = valor_venda * (config["aliquotaCOFINS"] / 100)
-
+    
     print(f"PIS: R$ {pis:.2f}")
     print(f"COFINS: R$ {cofins:.2f}")
     print(f"Total: R$ {pis + cofins:.2f}")
     ```
-
+    
     **Tools Relacionadas:**
     - `consultar_icms` - Configurações de ICMS
     - `consultar_dre` - Análise financeira com impostos
@@ -4526,35 +4317,28 @@ def consultar_pisconfins(ultimo_codigo: Optional[int] = None, limite: Optional[i
 
 
 @mcp.tool()
-def consultar_trr_pedido(
-    empresa_codigo: Optional[int] = None,
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    pedido_codigo: Optional[int] = None,
-) -> str:
+def consultar_trr_pedido(empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, pedido_codigo: Optional[int] = None) -> str:
     """
     **Consulta TRR (Transferência de Recebimento de Recursos) de pedidos.**
-
+    
     Retorna registros de recebimento de mercadorias vinculados a pedidos de compra,
     essencial para controle de entrada de estoque.
-
+    
     **Quando usar:**
     - Acompanhar recebimento de pedidos
     - Controle de entrada de mercadorias
     - Validação de entregas
-
+    
     **Parâmetros:**
     - `pedido_codigo` (int, opcional): Código do pedido
     - `data_inicial`, `data_final` (str, opcional): Período (YYYY-MM-DD)
     - `empresa_codigo` (int, opcional): Código da empresa
-
+    
     **Exemplo:**
     ```python
     trr = consultar_trr_pedido(pedido_codigo=123, empresa_codigo=1)
     ```
-
+    
     **Tools Relacionadas:** `pedido_compra`, `consultar_compra`
     """
     params = {}
@@ -4577,13 +4361,7 @@ def consultar_trr_pedido(
 
 
 @mcp.tool()
-def consultar_pdv(
-    pdv_referencia: Optional[str] = None,
-    pdv_codigo: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_pdv(pdv_referencia: Optional[str] = None, pdv_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta PDVs (Pontos de Venda / Caixas) cadastrados.**
 
@@ -4695,15 +4473,7 @@ def consultar_pdv(
 
 
 @mcp.tool()
-def consultar_nfse(
-    empresa_codigo: Optional[list] = None,
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    nfse_codigo: Optional[int] = None,
-    produto_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_nfse(empresa_codigo: Optional[list] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, nfse_codigo: Optional[int] = None, produto_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta itens de NFS-e (Nota Fiscal de Serviço Eletrônica).**
 
@@ -4740,18 +4510,7 @@ def consultar_nfse(
 
 
 @mcp.tool()
-def consultar_nfse_1(
-    empresa_codigo: Optional[list] = None,
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    fornecedor_codigo: Optional[int] = None,
-    cliente_codigo: Optional[int] = None,
-    nfse_codigo: Optional[int] = None,
-    rps: Optional[str] = None,
-    tipo_nota: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_nfse_1(empresa_codigo: Optional[list] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, fornecedor_codigo: Optional[int] = None, cliente_codigo: Optional[int] = None, nfse_codigo: Optional[int] = None, rps: Optional[str] = None, tipo_nota: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta NFS-e (Nota Fiscal de Serviço Eletrônica).**
 
@@ -4795,15 +4554,7 @@ def consultar_nfse_1(
 
 
 @mcp.tool()
-def consultar_nota_saida_item(
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    empresa_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    nota_codigo: Optional[int] = None,
-    nota_item_codigo: Optional[int] = None,
-) -> str:
+def consultar_nota_saida_item(data_inicial: Optional[str] = None, data_final: Optional[str] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, nota_codigo: Optional[int] = None, nota_item_codigo: Optional[int] = None) -> str:
     """
     **Consulta itens de notas de saída.**
 
@@ -4840,35 +4591,27 @@ def consultar_nota_saida_item(
 
 
 @mcp.tool()
-def consultar_nota_manifestacao(
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    compra_codigo: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    manifestacao_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_nota_manifestacao(data_inicial: Optional[str] = None, data_final: Optional[str] = None, compra_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, manifestacao_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta manifestações de notas fiscais eletrônicas (NFe).**
-
+    
     Esta tool permite consultar manifestações realizadas sobre notas fiscais eletrônicas
     recebidas. A manifestação é obrigatória para confirmar ou recusar o recebimento de
     mercadorias e é essencial para compliance fiscal.
-
+    
     **Quando usar:**
     - Para consultar status de manifestações de NFe
     - Para auditorias de notas fiscais recebidas
     - Para compliance com SEFAZ
     - Para validação de recebimento de mercadorias
     - Para integrações contábeis
-
+    
     **Tipos de Manifestação:**
     - Confirmação da Operação
     - Ciência da Emissão
     - Desconhecimento da Operação
     - Operação Não Realizada
-
+    
     **Parâmetros:**
     - `data_inicial`, `data_final` (str, opcional): Período de consulta.
       Formato: "YYYY-MM-DD"
@@ -4876,7 +4619,7 @@ def consultar_nota_manifestacao(
     - `compra_codigo` (int, opcional): Filtrar por compra específica.
     - `manifestacao_codigo` (int, opcional): Filtrar por manifestação específica.
     - `ultimo_codigo`, `limite` (int, opcional): Paginação.
-
+    
     **Exemplo de Uso (Python):**
     ```python
     # Consultar manifestações do mês
@@ -4885,12 +4628,12 @@ def consultar_nota_manifestacao(
         data_final="2025-01-31",
         empresa_codigo=7
     )
-
+    
     # Verificar manifestações pendentes
     pendentes = [m for m in manifestacoes if m["status"] == "PENDENTE"]
     print(f"Manifestações pendentes: {len(pendentes)}")
     ```
-
+    
     **Tools Relacionadas:**
     - `autorizar_nfe` - Autorizar emissão de NFe
     - `consultar_icms` - Configurações tributárias
@@ -4917,19 +4660,7 @@ def consultar_nota_manifestacao(
 
 
 @mcp.tool()
-def consultar_nfe_saida(
-    data_inicial: str,
-    data_final: str,
-    chave_documento: Optional[str] = None,
-    empresa_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    situacao: Optional[str] = None,
-    numero_documento: Optional[str] = None,
-    serie_documento: Optional[str] = None,
-    nota_codigo: Optional[list] = None,
-    gerou_venda: Optional[bool] = None,
-) -> str:
+def consultar_nfe_saida(data_inicial: str, data_final: str, chave_documento: Optional[str] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, situacao: Optional[str] = None, numero_documento: Optional[str] = None, serie_documento: Optional[str] = None, nota_codigo: Optional[list] = None, gerou_venda: Optional[bool] = None) -> str:
     """
     **Consulta NF-e de Saída (Nota Fiscal Eletrônica).**
 
@@ -4975,14 +4706,7 @@ def consultar_nfe_saida(
 
 
 @mcp.tool()
-def consulta_nfe_xml(
-    id: Optional[int] = None,
-    modelo_documento: Optional[int] = None,
-    numero_documento: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    serie_documento: Optional[int] = None,
-    situacao: Optional[str] = None,
-) -> str:
+def consulta_nfe_xml(id: Optional[int] = None, modelo_documento: Optional[int] = None, numero_documento: Optional[int] = None, empresa_codigo: Optional[int] = None, serie_documento: Optional[int] = None, situacao: Optional[str] = None) -> str:
     """
     **Obtém XML de NF-e.**
 
@@ -5018,15 +4742,7 @@ def consulta_nfe_xml(
 
 
 @mcp.tool()
-def consultar_nfce(
-    data_inicial: str,
-    data_final: str,
-    empresa_codigo: Optional[list] = None,
-    venda_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    situacao: Optional[str] = None,
-) -> str:
+def consultar_nfce(data_inicial: str, data_final: str, empresa_codigo: Optional[list] = None, venda_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, situacao: Optional[str] = None) -> str:
     """
     **Consulta NFC-e (Nota Fiscal de Consumidor Eletrônica).**
 
@@ -5064,9 +4780,7 @@ def consultar_nfce(
 
 
 @mcp.tool()
-def consult_nfcea_xml(
-    id: str, modelo_documento: int, numero_documento: int, empresa_codigo: int, serie_documento: int
-) -> str:
+def consult_nfcea_xml(id: str, modelo_documento: int, numero_documento: int, empresa_codigo: int, serie_documento: int) -> str:
     """consultNfceaXml - GET /INTEGRACAO/NFCE/{id}/XML"""
     params = {}
     if modelo_documento is not None:
@@ -5084,24 +4798,14 @@ def consult_nfcea_xml(
 
 
 @mcp.tool()
-def consultar_relatorio_mapa(
-    data_inicial: str,
-    data_final: str,
-    empresa_codigo: Optional[list] = None,
-    venda_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    quitado: Optional[bool] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    origem: Optional[str] = None,
-) -> str:
+def consultar_relatorio_mapa(data_inicial: str, data_final: str, empresa_codigo: Optional[list] = None, venda_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, quitado: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, origem: Optional[str] = None) -> str:
     """
     **Gera o Mapa de Desempenho consolidando vendas, custos e performance.**
-
+    
     Esta tool fornece uma visão consolidada do desempenho operacional, combinando dados
     de vendas, custos, margens e indicadores de performance em um único relatório.
     É essencial para análise gerencial e tomada de decisões estratégicas.
-
+    
     **Quando usar:**
     - Para análise consolidada de performance
     - Para dashboards gerenciais
@@ -5109,42 +4813,42 @@ def consultar_relatorio_mapa(
     - Para identificação de oportunidades de melhoria
     - Para relatórios executivos
     - Para acompanhamento de metas e KPIs
-
+    
     **Fluxo de Uso Essencial:**
     1. **Obtenha IDs das Empresas:** Use `consultar_empresa` para listar filiais.
     2. **Defina o Período:** Determine datas inicial e final.
     3. **Execute o Mapa:** Chame `consultar_relatorio_mapa` com filtros desejados.
     4. **Analise Performance:** Interprete indicadores e identifique insights.
-
+    
     **Parâmetros:**
     - `data_inicial` (str, obrigatório): Data de início.
       Formato: "YYYY-MM-DD"
       Exemplo: "2025-01-01"
-
+    
     - `data_final` (str, obrigatório): Data de fim.
       Formato: "YYYY-MM-DD"
       Exemplo: "2025-01-31"
-
+    
     - `empresa_codigo` (List[int], opcional): Lista de códigos das empresas.
       Obter via: `consultar_empresa`
       Exemplo: [7, 12]
-
+    
     - `venda_codigo` (int, opcional): Filtrar por venda específica.
       Exemplo: 12345
-
+    
     - `quitado` (bool, opcional): Filtrar por vendas quitadas/não quitadas.
       Exemplo: True
-
+    
     - `origem` (str, opcional): Filtrar por origem da venda (PDV, APP, etc).
       Exemplo: "PDV"
-
+    
     - `data_hora_atualizacao` (str, opcional): Filtrar registros atualizados após data/hora.
       Formato: "YYYY-MM-DD HH:MM:SS"
       Exemplo: "2025-01-10 08:00:00"
-
+    
     - `limite` (int, opcional): Número máximo de registros (default: 100).
     - `ultimo_codigo` (int, opcional): Para paginação.
-
+    
     **Retorno:**
     Mapa de desempenho contendo:
     - Vendas totais por período
@@ -5154,7 +4858,7 @@ def consultar_relatorio_mapa(
     - Performance por filial
     - Indicadores de eficiência
     - Comparações com períodos anteriores
-
+    
     **Exemplo de Uso (Python):**
     ```python
     # Cenário 1: Mapa de desempenho mensal de uma filial
@@ -5163,14 +4867,14 @@ def consultar_relatorio_mapa(
         data_final="2025-01-31",
         empresa_codigo=[7]
     )
-
+    
     # Cenário 2: Comparação de desempenho entre filiais
     mapa_consolidado = consultar_relatorio_mapa(
         data_inicial="2025-01-01",
         data_final="2025-01-31",
         empresa_codigo=[7, 12, 25]
     )
-
+    
     # Cenário 3: Análise de vendas quitadas
     vendas_quitadas = consultar_relatorio_mapa(
         data_inicial="2025-01-01",
@@ -5179,15 +4883,15 @@ def consultar_relatorio_mapa(
         quitado=True
     )
     ```
-
+    
     **Dicas de Análise:**
     - Compare margens entre filiais para identificar melhores práticas
     - Analise ticket médio para avaliar estratégias de vendas
     - Monitore volume de transações para identificar tendências
-
+    
     **Dependências:**
     - Opcional: `consultar_empresa` (para obter empresa_codigo)
-
+    
     **Tools Relacionadas:**
     - `vendas_periodo` - Detalhamento de vendas
     - `consultar_dre` - Análise financeira completa
@@ -5222,11 +4926,11 @@ def consultar_relatorio_mapa(
 def consultar_icms(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta configurações e alíquotas de ICMS para compliance tributário.**
-
+    
     Esta tool fornece acesso às configurações de ICMS (Imposto sobre Circulação de
     Mercadorias e Serviços) cadastradas no sistema, incluindo alíquotas, CSTs, CFOPs
     e regras de tributação. Essencial para compliance fiscal e cálculo correto de impostos.
-
+    
     **Quando usar:**
     - Para consultar alíquotas de ICMS por estado e produto
     - Para validação de cálculos tributários
@@ -5234,11 +4938,11 @@ def consultar_icms(ultimo_codigo: Optional[int] = None, limite: Optional[int] = 
     - Para configuração de novos produtos
     - Para compliance com legislação tributária
     - Para integrações com sistemas contábeis
-
+    
     **Parâmetros:**
     - `ultimo_codigo` (int, opcional): Para paginação.
     - `limite` (int, opcional): Número máximo de registros (default: 100).
-
+    
     **Retorno:**
     Configurações de ICMS contendo:
     - Alíquotas por estado (UF)
@@ -5247,17 +4951,17 @@ def consultar_icms(ultimo_codigo: Optional[int] = None, limite: Optional[int] = 
     - Base de cálculo
     - Reduções de base
     - Isenções e benefícios fiscais
-
+    
     **Exemplo de Uso (Python):**
     ```python
     # Listar todas as configurações de ICMS
     icms_config = consultar_icms(limite=500)
-
+    
     # Filtrar alíquota para um estado específico
     icms_sp = [i for i in icms_config if i["uf"] == "SP"]
     print(f"Alíquota ICMS SP: {icms_sp[0]['aliquota']}%")
     ```
-
+    
     **Tools Relacionadas:**
     - `consultar_pisconfins` - Configurações de PIS/COFINS
     - `consultar_nota_manifestacao` - Manifestação de notas fiscais
@@ -5277,23 +4981,23 @@ def consultar_icms(ultimo_codigo: Optional[int] = None, limite: Optional[int] = 
 def consultar_grupo_meta(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta grupos de metas comerciais.**
-
+    
     Retorna configurações de grupos de metas que organizam objetivos comerciais
     por período, equipe ou categoria.
-
+    
     **Quando usar:**
     - Estruturar planejamento comercial
     - Organizar metas por período
     - Gestão de campanhas de vendas
-
+    
     **Parâmetros:**
     - `ultimo_codigo`, `limite` (int, opcional): Paginação
-
+    
     **Exemplo:**
     ```python
     grupos = consultar_grupo_meta(limite=50)
     ```
-
+    
     **Tools Relacionadas:** `consultar_produto_meta`, `consultar_funcionario_meta`
     """
     params = {}
@@ -5308,31 +5012,27 @@ def consultar_grupo_meta(ultimo_codigo: Optional[int] = None, limite: Optional[i
 
 
 @mcp.tool()
-def consultar_grupo(
-    grupo_codigo_externo: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_grupo(grupo_codigo_externo: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta grupos de produtos.**
-
+    
     Retorna categorização de produtos em grupos (Combustíveis, Lubrificantes,
     Conveniência, etc.) para organização e relatórios.
-
+    
     **Quando usar:**
     - Organizar catálogo de produtos
     - Relatórios por categoria
     - Análise de mix de produtos
-
+    
     **Parâmetros:**
     - `grupo_codigo_externo` (str, opcional): Código externo do grupo
     - `ultimo_codigo`, `limite` (int, opcional): Paginação
-
+    
     **Exemplo:**
     ```python
     grupos = consultar_grupo(limite=50)
     ```
-
+    
     **Tools Relacionadas:** `consultar_sub_grupo_rede`, `consultar_produto`
     """
     params = {}
@@ -5352,23 +5052,23 @@ def consultar_grupo(
 def consultar_funcoes(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta funções/cargos de funcionários.**
-
+    
     Retorna lista de funções (Frentista, Gerente, Caixa, etc.) para
     classificação de funcionários e gestão de RH.
-
+    
     **Quando usar:**
     - Cadastro de funcionários
     - Relatórios de RH por cargo
     - Gestão de equipes
-
+    
     **Parâmetros:**
     - `ultimo_codigo`, `limite` (int, opcional): Paginação
-
+    
     **Exemplo:**
     ```python
     funcoes = consultar_funcoes(limite=50)
     ```
-
+    
     **Tools Relacionadas:** `consultar_funcionario`, `consultar_funcionario_meta`
     """
     params = {}
@@ -5383,31 +5083,27 @@ def consultar_funcoes(ultimo_codigo: Optional[int] = None, limite: Optional[int]
 
 
 @mcp.tool()
-def consultar_funcionario_meta(
-    grupo_meta_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_funcionario_meta(grupo_meta_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta metas de vendas por funcionário.**
-
+    
     Retorna metas individuais e coletivas de funcionários para gestão de
     desempenho e incentivos comerciais.
-
+    
     **Quando usar:**
     - Acompanhar performance de equipes
     - Gestão de comissões
     - Avaliação de desempenho individual
-
+    
     **Parâmetros:**
     - `grupo_meta_codigo` (int, opcional): Código do grupo de metas
     - `ultimo_codigo`, `limite` (int, opcional): Paginação
-
+    
     **Exemplo:**
     ```python
     metas_equipe = consultar_funcionario_meta(grupo_meta_codigo=5, limite=100)
     ```
-
+    
     **Tools Relacionadas:** `consultar_produto_meta`, `consultar_funcionario`
     """
     params = {}
@@ -5424,12 +5120,7 @@ def consultar_funcionario_meta(
 
 
 @mcp.tool()
-def consultar_funcionario(
-    funcionario_codigo: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_funcionario(funcionario_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta funcionários cadastrados no sistema.**
 
@@ -5529,15 +5220,7 @@ def consultar_funcionario(
 
 
 @mcp.tool()
-def consultar_fornecedor(
-    retorna_observacoes: Optional[bool] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    fornecedor_codigo_externo: Optional[str] = None,
-    fornecedor_codigo: Optional[int] = None,
-    cnpj_cpf: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_fornecedor(retorna_observacoes: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, fornecedor_codigo_externo: Optional[str] = None, fornecedor_codigo: Optional[int] = None, cnpj_cpf: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta fornecedores cadastrados.**
 
@@ -5612,9 +5295,7 @@ def consultar_fornecedor(
 
 
 @mcp.tool()
-def consultar_forma_pagamento(
-    ultimo_codigo: Optional[int] = None, limite: Optional[int] = None
-) -> str:
+def consultar_forma_pagamento(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta formas de pagamento cadastradas.**
 
@@ -5658,13 +5339,7 @@ def consultar_forma_pagamento(
 
 
 @mcp.tool()
-def consultar_esclusao_financeiro(
-    empresa_codigo: Optional[int] = None,
-    data_hora_inicial: Optional[str] = None,
-    data_hora_final: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_esclusao_financeiro(empresa_codigo: Optional[int] = None, data_hora_inicial: Optional[str] = None, data_hora_final: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """consultarEsclusaoFinanceiro - GET /INTEGRACAO/FINANCEIRO_EXCLUSAO"""
     params = {}
     if empresa_codigo is not None:
@@ -5684,13 +5359,7 @@ def consultar_esclusao_financeiro(
 
 
 @mcp.tool()
-def estoque_periodo(
-    data_final: str,
-    empresa_codigo: Optional[int] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def estoque_periodo(data_final: str, empresa_codigo: Optional[int] = None, data_hora_atualizacao: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta o estoque de produtos em uma data específica.**
 
@@ -5790,14 +5459,7 @@ def estoque_periodo(
 
 
 @mcp.tool()
-def estoque(
-    empresa_codigo: Optional[int] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    estoque_codigo: Optional[int] = None,
-    estoque_codigo_externo: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def estoque(empresa_codigo: Optional[int] = None, data_hora_atualizacao: Optional[str] = None, estoque_codigo: Optional[int] = None, estoque_codigo_externo: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta estoque de produtos por unidade.**
 
@@ -5864,12 +5526,12 @@ def estoque(
 
     # Cenário 2: Identificar produtos com estoque baixo
     estoque_unidade = estoque(empresa_codigo=7, limite=1000)
-
+    
     produtos_baixo_estoque = [
-        e for e in estoque_unidade
+        e for e in estoque_unidade 
         if e["quantidadeAtual"] <= e["estoqueMinimo"]
     ]
-
+    
     print(f"Produtos com estoque baixo: {len(produtos_baixo_estoque)}")
     for p in produtos_baixo_estoque:
         print(f"- {p['produtoDescricao']}: {p['quantidadeAtual']} (mín: {p['estoqueMinimo']})")
@@ -5883,11 +5545,11 @@ def estoque(
 
     # Cenário 4: Relatório de valor de estoque
     estoque_unidade = estoque(empresa_codigo=7, limite=1000)
-
+    
     # Buscar preços dos produtos
     produtos = consultar_produto(empresa_codigo=7, limite=1000)
     precos = {p["codigo"]: p["precoCusto"] for p in produtos}
-
+    
     valor_total = sum(
         e["quantidadeAtual"] * precos.get(e["produtoCodigo"], 0)
         for e in estoque_unidade
@@ -5933,11 +5595,7 @@ def estoque(
 
 
 @mcp.tool()
-def consultar_empresa(
-    empresa_codigo_externo: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_empresa(empresa_codigo_externo: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta empresas/filiais cadastradas no sistema.**
 
@@ -5990,7 +5648,7 @@ def consultar_empresa(
     ```python
     # Cenário 1: Listar todas as filiais da rede
     empresas = consultar_empresa()
-
+    
     for empresa in empresas:
         print(f"Código: {empresa['empresaCodigo']} - {empresa['nomeFantasia']}")
 
@@ -6002,7 +5660,7 @@ def consultar_empresa(
     # Cenário 3: Obter código para usar em outras tools
     empresas = consultar_empresa()
     empresa_codigo = empresas[0]["empresaCodigo"]
-
+    
     # Usar o código em outras consultas
     vendas = consultar_venda(
         data_inicial="2025-01-01",
@@ -6044,22 +5702,7 @@ def consultar_empresa(
 
 
 @mcp.tool()
-def consultar_duplicata(
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    apenas_pendente: Optional[bool] = None,
-    data_filtro: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    nota_entrada_codigo: Optional[int] = None,
-    titulo_pagar_codigo: Optional[int] = None,
-    fornecedor_codigo: Optional[int] = None,
-    linha_digitavel: Optional[str] = None,
-    autorizado: Optional[bool] = None,
-    tipo_lancamento: Optional[str] = None,
-) -> str:
+def consultar_duplicata(data_inicial: Optional[str] = None, data_final: Optional[str] = None, data_hora_atualizacao: Optional[str] = None, apenas_pendente: Optional[bool] = None, data_filtro: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, empresa_codigo: Optional[int] = None, nota_entrada_codigo: Optional[int] = None, titulo_pagar_codigo: Optional[int] = None, fornecedor_codigo: Optional[int] = None, linha_digitavel: Optional[str] = None, autorizado: Optional[bool] = None, tipo_lancamento: Optional[str] = None) -> str:
     """
     **Consulta duplicatas (títulos a pagar de fornecedores).**
 
@@ -6152,7 +5795,7 @@ def consultar_duplicata(
         empresa_codigo=7,
         limite=500
     )
-
+    
     total_duplicatas = sum(d["valorOriginal"] for d in duplicatas_mes)
     total_pendente = sum(d["saldoPendente"] for d in duplicatas_mes if d["saldoPendente"] > 0)
     ```
@@ -6208,24 +5851,15 @@ def consultar_duplicata(
 
 
 @mcp.tool()
-def consultar_dre(
-    data_inicial: str,
-    data_final: str,
-    apuracao_caixa: Optional[bool] = None,
-    cfop_outras_saidas: Optional[bool] = None,
-    apurar_juros_descontos: Optional[bool] = None,
-    filiais: Optional[list] = None,
-    centro_custo_codigo: Optional[list] = None,
-    apurar_centro_custo_produto: Optional[bool] = None,
-) -> str:
+def consultar_dre(data_inicial: str, data_final: str, apuracao_caixa: Optional[bool] = None, cfop_outras_saidas: Optional[bool] = None, apurar_juros_descontos: Optional[bool] = None, filiais: Optional[list] = None, centro_custo_codigo: Optional[list] = None, apurar_centro_custo_produto: Optional[bool] = None) -> str:
     """
     **Gera o Demonstrativo de Resultados do Exercício (DRE) para análise financeira.**
-
+    
     Esta tool é fundamental para gestão financeira e contábil, fornecendo uma visão completa
     da performance econômica do negócio. O DRE apresenta receitas, custos, despesas e
     resultado líquido de forma estruturada, permitindo análise de rentabilidade e tomada
     de decisões estratégicas.
-
+    
     **Quando usar:**
     - Para análise de rentabilidade do negócio
     - Para fechamento contábil mensal/anual
@@ -6234,7 +5868,7 @@ def consultar_dre(
     - Para identificação de oportunidades de redução de custos
     - Para relatórios gerenciais e executivos
     - Para compliance contábil e fiscal
-
+    
     **Estrutura do DRE:**
     O DRE segue a estrutura contábil padrão:
     ```
@@ -6250,44 +5884,44 @@ def consultar_dre(
     (-) Impostos
     (=) Resultado Líquido
     ```
-
+    
     **Fluxo de Uso Essencial:**
     1. **Obtenha IDs das Filiais:** Use `consultar_empresa` para obter códigos das filiais.
     2. **Defina o Período:** Determine as datas inicial e final para análise.
     3. **Configure Parâmetros:** Escolha o tipo de apuração (caixa ou competência).
     4. **Execute o DRE:** Chame `consultar_dre` com os parâmetros configurados.
     5. **Analise Resultados:** Interprete os indicadores e identifique insights.
-
+    
     **Parâmetros:**
     - `data_inicial` (str, obrigatório): Data de início do período.
       Formato: "YYYY-MM-DD"
       Exemplo: "2025-01-01"
-
+    
     - `data_final` (str, obrigatório): Data de fim do período.
       Formato: "YYYY-MM-DD"
       Exemplo: "2025-01-31"
-
+    
     - `filiais` (List[int], opcional): Lista de códigos das filiais para incluir no DRE.
       Obter via: `consultar_empresa`
       Exemplo: [7, 12, 25]
-
+    
     - `apuracao_caixa` (bool, opcional): Se True, usa regime de caixa; se False, competência.
       Default: False (competência)
       Exemplo: True
-
+    
     - `cfop_outras_saidas` (bool, opcional): Se True, inclui CFOPs de outras saídas no DRE.
       Exemplo: False
-
+    
     - `apurar_juros_descontos` (bool, opcional): Se True, separa juros e descontos no resultado.
       Exemplo: True
-
+    
     - `centro_custo_codigo` (List[int], opcional): Filtrar por centros de custo específicos.
       Obter via: `consultar_centro_custo`
       Exemplo: [10, 20]
-
+    
     - `apurar_centro_custo_produto` (bool, opcional): Se True, detalha por centro de custo/produto.
       Exemplo: True
-
+    
     **Retorno:**
     DRE estruturado contendo:
     - Receita bruta total
@@ -6300,7 +5934,7 @@ def consultar_dre(
     - Resultado financeiro (juros, descontos)
     - Resultado líquido e margem líquida (%)
     - Indicadores de performance (ROI, ROE)
-
+    
     **Exemplo de Uso (Python):**
     ```python
     # Cenário 1: DRE mensal simples (regime de competência)
@@ -6311,7 +5945,7 @@ def consultar_dre(
         apuracao_caixa=False
     )
     print("DRE Janeiro:", dre_janeiro)
-
+    
     # Cenário 2: DRE consolidado de múltiplas filiais (regime de caixa)
     dre_consolidado = consultar_dre(
         data_inicial="2025-01-01",
@@ -6320,7 +5954,7 @@ def consultar_dre(
         apuracao_caixa=True,
         apurar_juros_descontos=True
     )
-
+    
     # Cenário 3: DRE detalhado por centro de custo
     dre_detalhado = consultar_dre(
         data_inicial="2025-01-01",
@@ -6329,7 +5963,7 @@ def consultar_dre(
         centro_custo_codigo=[10, 20, 30],
         apurar_centro_custo_produto=True
     )
-
+    
     # Cenário 4: Comparação entre períodos
     # DRE do mês atual
     dre_atual = consultar_dre(
@@ -6337,65 +5971,65 @@ def consultar_dre(
         data_final="2025-01-31",
         filiais=[7]
     )
-
+    
     # DRE do mês anterior
     dre_anterior = consultar_dre(
         data_inicial="2024-12-01",
         data_final="2024-12-31",
         filiais=[7]
     )
-
+    
     # Calcular variação
     variacao_receita = (
-        (dre_atual["receitaLiquida"] - dre_anterior["receitaLiquida"]) /
+        (dre_atual["receitaLiquida"] - dre_anterior["receitaLiquida"]) / 
         dre_anterior["receitaLiquida"] * 100
     )
     print(f"Variação de receita: {variacao_receita:.2f}%")
     ```
-
+    
     **Dicas de Análise:**
     - **Margem Bruta:** Indica eficiência na precificação e gestão de custos.
       Ideal: > 30% para postos de combustível.
-
+    
     - **Margem Líquida:** Mostra a rentabilidade final do negócio.
       Ideal: > 5% para o setor.
-
+    
     - **EBITDA:** Mede a capacidade de geração de caixa operacional.
       Quanto maior, melhor a saúde financeira.
-
+    
     - **Comparações:** Sempre compare DREs de períodos similares (mês vs mês,
       ano vs ano) para identificar tendências.
-
+    
     - **Análise Vertical:** Calcule cada linha do DRE como % da receita líquida
       para identificar desvios.
-
+    
     - **Análise Horizontal:** Compare DREs de períodos consecutivos para identificar
       crescimento ou redução de itens específicos.
-
+    
     **Casos de Uso Estratégicos:**
     - **Planejamento Orçamentário:** Use DREs históricos para projetar orçamentos futuros.
     - **Análise de Viabilidade:** Avalie a viabilidade de novos investimentos ou expansões.
     - **Negociação com Fornecedores:** Use dados de CMV para negociar melhores condições.
     - **Gestão de Custos:** Identifique despesas que podem ser otimizadas ou eliminadas.
     - **Valuation:** DREs são essenciais para avaliação do valor da empresa.
-
+    
     **Dependências:**
     - Opcional: `consultar_empresa` (para obter filiais)
     - Opcional: `consultar_centro_custo` (para filtrar por centro de custo)
-
+    
     **Tools Relacionadas:**
     - `vendas_periodo` - Detalhamento das receitas
     - `consultar_despesa_financeiro_rede` - Análise de despesas
     - `listar_relatorios_personalizados` - Listar relatórios customizados
     - `consultar_relatorio_mapa` - Mapa de vendas e custos
-
+    
     **Observações Importantes:**
     - **Regime de Caixa vs Competência:** Escolha conforme necessidade contábil.
       Caixa: considera quando o dinheiro entra/sai.
       Competência: considera quando a transação ocorre.
-
+    
     - **Performance:** DREs consolidados de múltiplas filiais podem demorar mais para processar.
-
+    
     - **Precisão:** Garanta que todos os lançamentos contábeis estejam corretos antes
       de gerar o DRE.
     """
@@ -6423,9 +6057,7 @@ def consultar_dre(
 
 
 @mcp.tool()
-def dfe_xml(
-    modelo_documento: int, numero_documento: int, empresa_codigo: int, serie_documento: int
-) -> str:
+def dfe_xml(modelo_documento: int, numero_documento: int, empresa_codigo: int, serie_documento: int) -> str:
     """dfeXml - GET /INTEGRACAO/DFE_XML"""
     params = {}
     if modelo_documento is not None:
@@ -6443,11 +6075,7 @@ def dfe_xml(
 
 
 @mcp.tool()
-def consultar_conta(
-    empresa_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_conta(empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta contas bancárias cadastradas.**
 
@@ -6491,12 +6119,7 @@ def consultar_conta(
 
 
 @mcp.tool()
-def consultar_contagem_estoque(
-    data_contagem: str,
-    contagem_referencia: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_contagem_estoque(data_contagem: str, contagem_referencia: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta contagens de estoque (inventários).**
 
@@ -6556,13 +6179,13 @@ def consultar_contagem_estoque(
         data_contagem="2025-01-10",
         limite=1000
     )
-
+    
     # Produtos com diferenças
     diferencas = [
-        c for c in contagens
+        c for c in contagens 
         if c["diferenca"] != 0
     ]
-
+    
     print(f"Produtos com diferenças: {len(diferencas)}")
     for d in diferencas:
         tipo = "SOBRA" if d["diferenca"] > 0 else "FALTA"
@@ -6573,11 +6196,11 @@ def consultar_contagem_estoque(
         data_contagem="2025-01-31",  # Último dia do mês
         limite=1000
     )
-
+    
     total_contado = sum(c["quantidadeContada"] for c in contagens)
     total_sistema = sum(c["quantidadeSistema"] for c in contagens)
     total_diferenca = total_contado - total_sistema
-
+    
     print(f"Total contado: {total_contado}")
     print(f"Total sistema: {total_sistema}")
     print(f"Diferença: {total_diferenca}")
@@ -6609,7 +6232,7 @@ def consultar_contagem_estoque(
     - Perdas não registradas
     - Furtos ou desvios
     - Erros na contagem física
-
+    
     Investigue diferenças acima de 5% do estoque.
     """
     params = {}
@@ -6628,13 +6251,7 @@ def consultar_contagem_estoque(
 
 
 @mcp.tool()
-def consumo_cliente(
-    token: str,
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consumo_cliente(token: str, data_inicial: Optional[str] = None, data_final: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """consumoCliente - GET /INTEGRACAO/CONSUMO_CLIENTE"""
     params = {}
     if token is not None:
@@ -6654,43 +6271,41 @@ def consumo_cliente(
 
 
 @mcp.tool()
-def consultar_view(
-    dias: Optional[int] = None, volume_minimo: Optional[int] = None, view: Optional[str] = None
-) -> str:
+def consultar_view(dias: Optional[int] = None, volume_minimo: Optional[int] = None, view: Optional[str] = None) -> str:
     """
     **Consulta views customizadas do banco de dados para análises avançadas.**
-
+    
     Esta tool permite acessar views (visões) SQL customizadas criadas no banco de dados
     do webPosto. Views são consultas pré-definidas que podem combinar dados de múltiplas
     tabelas, aplicar filtros complexos e fornecer dados agregados para análises específicas.
-
+    
     **Quando usar:**
     - Para acessar dados agregados e pré-processados
     - Para análises que requerem joins complexos
     - Para dashboards que necessitam de dados consolidados
     - Para relatórios customizados com regras de negócio específicas
     - Para consultas de performance otimizadas
-
+    
     **Conceito de Views:**
     Views são "tabelas virtuais" que não armazenam dados, mas sim consultas SQL.
     Elas simplificam consultas complexas e garantem consistência nos dados retornados.
-
+    
     **Fluxo de Uso Essencial:**
     1. **Identifique a View:** Determine qual view contém os dados necessários.
     2. **Configure Filtros:** Defina parâmetros como dias e volume mínimo.
     3. **Execute a Consulta:** Chame `consultar_view` com os parâmetros.
     4. **Processe Resultados:** Analise os dados retornados.
-
+    
     **Parâmetros:**
     - `view` (str, opcional): Nome da view a ser consultada.
       Exemplos: "vw_vendas_consolidadas", "vw_estoque_critico", "vw_performance_produtos"
-
+    
     - `dias` (int, opcional): Número de dias para filtrar dados históricos.
       Exemplo: 30 (dados dos últimos 30 dias)
-
+    
     - `volume_minimo` (int, opcional): Volume mínimo para filtrar resultados.
       Exemplo: 1000 (apenas registros com volume >= 1000)
-
+    
     **Retorno:**
     Dados da view consultada, que podem incluir:
     - Dados agregados (somas, médias, contagens)
@@ -6698,7 +6313,7 @@ def consultar_view(
     - Indicadores calculados
     - Rankings e classificações
     - Tendências e comparações
-
+    
     **Exemplo de Uso (Python):**
     ```python
     # Cenário 1: Consultar view de vendas consolidadas dos últimos 30 dias
@@ -6706,20 +6321,20 @@ def consultar_view(
         view="vw_vendas_consolidadas",
         dias=30
     )
-
+    
     # Cenário 2: Consultar produtos com estoque crítico
     estoque_critico = consultar_view(
         view="vw_estoque_critico",
         volume_minimo=100
     )
-
+    
     # Cenário 3: Análise de performance de produtos
     performance = consultar_view(
         view="vw_performance_produtos",
         dias=90,
         volume_minimo=500
     )
-
+    
     # Cenário 4: Dashboard executivo
     # Combinar múltiplas views para dashboard completo
     dashboard = {
@@ -6728,7 +6343,7 @@ def consultar_view(
         "performance": consultar_view(view="vw_performance_produtos", dias=30)
     }
     ```
-
+    
     **Dicas de Análise:**
     - **Identifique Views Disponíveis:** Consulte a documentação do sistema ou DBA
       para conhecer as views disponíveis.
@@ -6737,18 +6352,18 @@ def consultar_view(
     - **Combine Views:** Use múltiplas views para criar análises completas.
     - **Cache Resultados:** Para dashboards, considere cachear resultados de views
       que não mudam frequentemente.
-
+    
     **Casos de Uso Estratégicos:**
     - **Dashboard Executivo:** Combinar views de vendas, estoque e financeiro.
     - **Análise de Tendências:** Views com dados históricos agregados.
     - **Alertas Automáticos:** Views de estoque crítico, vendas baixas, etc.
     - **Relatórios Regulatórios:** Views pré-configuradas para compliance.
-
+    
     **Tools Relacionadas:**
     - `listar_relatorios_personalizados` - Listar relatórios customizados
     - `consultar_dre` - Análise financeira
     - `consultar_relatorio_mapa` - Mapa de desempenho
-
+    
     **Observações Importantes:**
     - Views disponíveis variam conforme configuração do sistema.
     - Algumas views podem ter performance variável conforme volume de dados.
@@ -6771,20 +6386,20 @@ def consultar_view(
 def consultar_sub_grupo_rede() -> str:
     """
     **Consulta subgrupos de produtos da rede.**
-
+    
     Retorna subcategorias de produtos compartilhadas entre unidades da rede,
     permitindo classificação hierárquica detalhada.
-
+    
     **Quando usar:**
     - Organização hierárquica de produtos
     - Relatórios detalhados por subcategoria
     - Gestão de catálogo
-
+    
     **Exemplo:**
     ```python
     subgrupos = consultar_sub_grupo_rede()
     ```
-
+    
     **Tools Relacionadas:** `consultar_grupo`, `consultar_produto`
     """
     params = {}
@@ -6819,20 +6434,20 @@ def consultar_sub_grupo_rede_1() -> str:
 def consultar_preco_idenfitid() -> str:
     """
     **Consulta histórico de alterações de preços.**
-
+    
     Retorna registro de todas as modificações de preços realizadas no sistema,
     permitindo auditoria e análise de estratégias de precificação.
-
+    
     **Quando usar:**
     - Auditoria de preços
     - Análise de estratégias de precificação
     - Compliance e controle interno
-
+    
     **Exemplo:**
     ```python
     historico = consultar_preco_idenfitid()
     ```
-
+    
     **Tools Relacionadas:** `consultar_produto`, `alterar_preco_combustivel`
     """
     params = {}
@@ -6844,38 +6459,28 @@ def consultar_preco_idenfitid() -> str:
 
 
 @mcp.tool()
-def consultar_lmc(
-    data_inicial: str,
-    data_final: str,
-    empresa_codigo: Optional[list] = None,
-    venda_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    quitado: Optional[bool] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    origem: Optional[str] = None,
-) -> str:
+def consultar_lmc(data_inicial: str, data_final: str, empresa_codigo: Optional[list] = None, venda_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, quitado: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, origem: Optional[str] = None) -> str:
     """
     **Consulta Lucro Máximo de Contribuição (LMC) por venda.**
-
+    
     Retorna análise de rentabilidade detalhada por venda, calculando LMC
     (margem de contribuição) para avaliação de performance comercial.
-
+    
     **Quando usar:**
     - Análise de rentabilidade por venda
     - Avaliação de margens de contribuição
     - Relatórios gerenciais de lucratividade
-
+    
     **Parâmetros:**
     - `data_inicial`, `data_final` (str, obrigatório): Período (YYYY-MM-DD)
     - `empresa_codigo` (list, opcional): Lista de códigos de empresas
     - `quitado` (bool, opcional): Filtrar por status de pagamento
-
+    
     **Exemplo:**
     ```python
     lmc = consultar_lmc(data_inicial='2025-01-01', data_final='2025-01-31')
     ```
-
+    
     **Tools Relacionadas:** `consultar_lmc_1`, `consultar_produto_lmc_lmp`
     """
     params = {}
@@ -6904,36 +6509,26 @@ def consultar_lmc(
 
 
 @mcp.tool()
-def consultar_lmc_1(
-    data_inicial: str,
-    data_final: str,
-    empresa_codigo: Optional[list] = None,
-    venda_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    quitado: Optional[bool] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    origem: Optional[str] = None,
-) -> str:
+def consultar_lmc_1(data_inicial: str, data_final: str, empresa_codigo: Optional[list] = None, venda_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, quitado: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, origem: Optional[str] = None) -> str:
     """
     **Consulta LMC (endpoint alternativo).**
-
+    
     Versão alternativa da consulta de Lucro Máximo de Contribuição,
     com mesma funcionalidade mas endpoint diferente.
-
+    
     **Quando usar:**
     - Mesmos casos de uso que `consultar_lmc`
     - Usar se `consultar_lmc` apresentar problemas
-
+    
     **Parâmetros:**
     - `data_inicial`, `data_final` (str, obrigatório): Período
     - `empresa_codigo` (list, opcional): Lista de empresas
-
+    
     **Exemplo:**
     ```python
     lmc = consultar_lmc_1(data_inicial='2025-01-01', data_final='2025-01-31')
     ```
-
+    
     **Tools Relacionadas:** `consultar_lmc`
     """
     params = {}
@@ -6973,9 +6568,7 @@ def consultar_funcionario_idenfitid() -> str:
 
 
 @mcp.tool()
-def consultar_despesa_financeiro_rede(
-    data_inicial: str, data_final: str, apuracao_caixa: Optional[bool] = None
-) -> str:
+def consultar_despesa_financeiro_rede(data_inicial: str, data_final: str, apuracao_caixa: Optional[bool] = None) -> str:
     """consultarDespesaFinanceiroRede - GET /INTEGRACAO/CONSULTAR_DESPESAS_FINANCEIRO_REDE"""
     params = {}
     if data_inicial is not None:
@@ -7003,39 +6596,28 @@ def consultar_cartoes_clubgas(nome_tabela: str) -> str:
 
 
 @mcp.tool()
-def consultar_compra_item(
-    turno: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    usa_produto_lmc: Optional[bool] = None,
-    compra_codigo: Optional[int] = None,
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    tipo_data: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    situacao: Optional[str] = None,
-) -> str:
+def consultar_compra_item(turno: Optional[int] = None, empresa_codigo: Optional[int] = None, usa_produto_lmc: Optional[bool] = None, compra_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, situacao: Optional[str] = None) -> str:
     """
     **Consulta itens de compras (produtos adquiridos).**
-
+    
     Retorna detalhamento de produtos em notas fiscais de entrada, com
     quantidades, preços e informações fiscais.
-
+    
     **Quando usar:**
     - Detalhar produtos de uma compra
     - Análise de preços de aquisição
     - Controle de estoque por entrada
-
+    
     **Parâmetros:**
     - `compra_codigo` (int, opcional): Código da compra
     - `data_inicial`, `data_final` (str, opcional): Período
     - `empresa_codigo` (int, opcional): Código da empresa
-
+    
     **Exemplo:**
     ```python
     itens = consultar_compra_item(compra_codigo=1234, empresa_codigo=1)
     ```
-
+    
     **Tools Relacionadas:** `consultar_compra`, `consultar_produto`
     """
     params = {}
@@ -7066,41 +6648,29 @@ def consultar_compra_item(
 
 
 @mcp.tool()
-def consultar_compra(
-    turno: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    tipo_data: Optional[str] = None,
-    nota_serie: Optional[str] = None,
-    nota_numero: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    venda_codigo: Optional[list] = None,
-    situacao: Optional[str] = None,
-) -> str:
+def consultar_compra(turno: Optional[int] = None, empresa_codigo: Optional[int] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, tipo_data: Optional[str] = None, nota_serie: Optional[str] = None, nota_numero: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, venda_codigo: Optional[list] = None, situacao: Optional[str] = None) -> str:
     """
     **Consulta compras de mercadorias.**
-
+    
     Retorna notas fiscais de entrada (compras) de fornecedores, essencial para
     gestão de estoque e controle fiscal.
-
+    
     **Quando usar:**
     - Consultar histórico de compras
     - Controle de recebimento de mercadorias
     - Auditoria fiscal de entradas
-
+    
     **Parâmetros:**
     - `data_inicial`, `data_final` (str, opcional): Período (YYYY-MM-DD)
     - `empresa_codigo` (int, opcional): Código da empresa
     - `nota_numero`, `nota_serie` (str, opcional): Identificar nota específica
     - `situacao` (str, opcional): Filtrar por status
-
+    
     **Exemplo:**
     ```python
     compras = consultar_compra(data_inicial='2025-01-01', data_final='2025-01-31', empresa_codigo=1)
     ```
-
+    
     **Tools Relacionadas:** `consultar_compra_item`, `consultar_compra_xml`
     """
     params = {}
@@ -7136,23 +6706,23 @@ def consultar_compra(
 def consultar_compra_xml(chave_nfe: str) -> str:
     """
     **Consulta XML de nota fiscal de compra.**
-
+    
     Retorna arquivo XML completo da NFe de entrada para validação fiscal
     e integrações contábeis.
-
+    
     **Quando usar:**
     - Validação fiscal de entradas
     - Integração com sistemas contábeis
     - Auditoria de documentos fiscais
-
+    
     **Parâmetros:**
     - `chave_nfe` (str, obrigatório): Chave de acesso da NFe (44 dígitos)
-
+    
     **Exemplo:**
     ```python
     xml = consultar_compra_xml(chave_nfe='35250112345678901234550010000123451234567890')
     ```
-
+    
     **Tools Relacionadas:** `consultar_compra`, `consultar_nota_entrada`
     """
     params = {}
@@ -7164,13 +6734,7 @@ def consultar_compra_xml(chave_nfe: str) -> str:
 
 
 @mcp.tool()
-def cliente_frota(
-    cliente_codigo_externo: Optional[str] = None,
-    cliente_codigo: Optional[list] = None,
-    motorista_codigo: Optional[list] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def cliente_frota(cliente_codigo_externo: Optional[str] = None, cliente_codigo: Optional[list] = None, motorista_codigo: Optional[list] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """clienteFrota - GET /INTEGRACAO/CLIENTE_FROTA"""
     params = {}
     if cliente_codigo_externo is not None:
@@ -7190,9 +6754,7 @@ def cliente_frota(
 
 
 @mcp.tool()
-def consultar_cliente_empresa(
-    ultimo_codigo: Optional[int] = None, limite: Optional[int] = None
-) -> str:
+def consultar_cliente_empresa(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """consultarClienteEmpresa - GET /INTEGRACAO/CLIENTE_EMPRESA"""
     params = {}
     if ultimo_codigo is not None:
@@ -7206,20 +6768,7 @@ def consultar_cliente_empresa(
 
 
 @mcp.tool()
-def consultar_cheque_pagar(
-    data_inicial: str,
-    data_final: str,
-    tipo_data: str,
-    empresa_codigo: Optional[int] = None,
-    situacao: Optional[str] = None,
-    cheque_troco: Optional[bool] = None,
-    cheque_codigo: Optional[int] = None,
-    conta_codigo: Optional[int] = None,
-    caixa_codigo: Optional[int] = None,
-    tipo_inclusao: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_cheque_pagar(data_inicial: str, data_final: str, tipo_data: str, empresa_codigo: Optional[int] = None, situacao: Optional[str] = None, cheque_troco: Optional[bool] = None, cheque_codigo: Optional[int] = None, conta_codigo: Optional[int] = None, caixa_codigo: Optional[int] = None, tipo_inclusao: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """consultarChequePagar - GET /INTEGRACAO/CHEQUE_PAGAR"""
     params = {}
     if empresa_codigo is not None:
@@ -7253,18 +6802,7 @@ def consultar_cheque_pagar(
 
 
 @mcp.tool()
-def consultar_cheque(
-    data_inicial: str,
-    data_final: str,
-    turno: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    apenas_pendente: Optional[bool] = None,
-    data_filtro: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    venda_codigo: Optional[list] = None,
-) -> str:
+def consultar_cheque(data_inicial: str, data_final: str, turno: Optional[int] = None, empresa_codigo: Optional[int] = None, apenas_pendente: Optional[bool] = None, data_filtro: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, data_hora_atualizacao: Optional[str] = None, venda_codigo: Optional[list] = None) -> str:
     """
     **Consulta cheques recebidos (pré-datados e à vista).**
 
@@ -7334,7 +6872,7 @@ def consultar_cheque(
     import datetime
     hoje = datetime.date.today()
     proximos_7_dias = hoje + datetime.timedelta(days=7)
-
+    
     a_vencer = consultar_cheque(
         data_inicial=hoje.strftime("%Y-%m-%d"),
         data_final=proximos_7_dias.strftime("%Y-%m-%d"),
@@ -7359,7 +6897,7 @@ def consultar_cheque(
         empresa_codigo=7,
         limite=500
     )
-
+    
     total_cheques = sum(c["valor"] for c in cheques_mes)
     total_pendentes = sum(c["valor"] for c in cheques_mes if c["status"] == "PENDENTE")
     total_compensados = sum(c["valor"] for c in cheques_mes if c["status"] == "COMPENSADO")
@@ -7405,11 +6943,7 @@ def consultar_cheque(
 
 
 @mcp.tool()
-def consultar_centro_custo(
-    centro_custo_codigo_externo: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_centro_custo(centro_custo_codigo_externo: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta centros de custo cadastrados.**
 
@@ -7454,17 +6988,7 @@ def consultar_centro_custo(
 
 
 @mcp.tool()
-def consultar_pisconfins_1(
-    data_inicial: str,
-    data_final: str,
-    empresa_codigo: Optional[list] = None,
-    venda_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-    quitado: Optional[bool] = None,
-    data_hora_atualizacao: Optional[str] = None,
-    origem: Optional[str] = None,
-) -> str:
+def consultar_pisconfins_1(data_inicial: str, data_final: str, empresa_codigo: Optional[list] = None, venda_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, quitado: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, origem: Optional[str] = None) -> str:
     """
     **Consulta remessas de cartão (CARTAO_REMESSA).**
 
@@ -7516,17 +7040,7 @@ def consultar_pisconfins_1(
 
 
 @mcp.tool()
-def consultar_cartao_pagar(
-    data_inicial: str,
-    data_final: str,
-    tipo_data: str,
-    empresa_codigo: Optional[int] = None,
-    cartao_compra_codigo: Optional[int] = None,
-    situacao: Optional[str] = None,
-    autorizacao: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_cartao_pagar(data_inicial: str, data_final: str, tipo_data: str, empresa_codigo: Optional[int] = None, cartao_compra_codigo: Optional[int] = None, situacao: Optional[str] = None, autorizacao: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """consultarCartaoPagar - GET /INTEGRACAO/CARTAO_PAGAR"""
     params = {}
     if empresa_codigo is not None:
@@ -7554,12 +7068,7 @@ def consultar_cartao_pagar(
 
 
 @mcp.tool()
-def consultar_cheque_pagar_1(
-    cartao_compra_codigo: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_cheque_pagar_1(cartao_compra_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta compras no cartão corporativo (CARTAO_COMPRA).**
 
@@ -7597,14 +7106,7 @@ def consultar_cheque_pagar_1(
 
 
 @mcp.tool()
-def consultar_caixa_apresentado(
-    data_inicial: str,
-    data_final: str,
-    data_hora_atualizacao: Optional[str] = None,
-    tipo_data: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_caixa_apresentado(data_inicial: str, data_final: str, data_hora_atualizacao: Optional[str] = None, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """consultarCaixaApresentado - GET /INTEGRACAO/CAIXA_APRESENTADO"""
     params = {}
     if data_inicial is not None:
@@ -7626,15 +7128,7 @@ def consultar_caixa_apresentado(
 
 
 @mcp.tool()
-def consultar_caixa(
-    data_inicial: str,
-    data_final: str,
-    turno: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    individual: Optional[bool] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_caixa(data_inicial: str, data_final: str, turno: Optional[int] = None, empresa_codigo: Optional[int] = None, individual: Optional[bool] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta caixas (fechamentos de caixa).**
 
@@ -7672,9 +7166,7 @@ def consultar_caixa(
 
 
 @mcp.tool()
-def consultar_bomba(
-    bomba_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None
-) -> str:
+def consultar_bomba(bomba_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None) -> str:
     """
     **Consulta bombas de combustível cadastradas.**
 
@@ -7754,12 +7246,7 @@ def consultar_bomba(
 
 
 @mcp.tool()
-def consultar_bico(
-    bico_codigo: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_bico(bico_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta bicos de abastecimento cadastrados.**
 
@@ -7897,13 +7384,7 @@ def aprix_custo(data_inicial: str, data_final: str) -> str:
 
 
 @mcp.tool()
-def consultar_administradora(
-    administradora_codigo: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    administradora_codigo_externo: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_administradora(administradora_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, administradora_codigo_externo: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """consultarAdministradora - GET /INTEGRACAO/ADMINISTRADORA"""
     params = {}
     if administradora_codigo is not None:
@@ -7923,15 +7404,7 @@ def consultar_administradora(
 
 
 @mcp.tool()
-def consultar_adiantamento_fornecedor(
-    data_inicial: str,
-    data_final: str,
-    fornecedor_codigo: Optional[int] = None,
-    empresa_codigo: Optional[int] = None,
-    tipo_adiantamento: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_adiantamento_fornecedor(data_inicial: str, data_final: str, fornecedor_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, tipo_adiantamento: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """consultarAdiantamentoFornecedor - GET /INTEGRACAO/ADIANTAMENTO_FORNECEDOR"""
     params = {}
     if fornecedor_codigo is not None:
@@ -7955,13 +7428,7 @@ def consultar_adiantamento_fornecedor(
 
 
 @mcp.tool()
-def consultar_abastecimento(
-    data_inicial: str,
-    data_final: str,
-    tipo_data: Optional[str] = None,
-    ultimo_codigo: Optional[int] = None,
-    limite: Optional[int] = None,
-) -> str:
+def consultar_abastecimento(data_inicial: str, data_final: str, tipo_data: Optional[str] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
     **Consulta abastecimentos realizados na pista.**
 
@@ -8027,16 +7494,16 @@ def consultar_abastecimento(
         data_inicial="2025-01-01",
         data_final="2025-01-31"
     )
-
+    
     # Agrupar por produto
     from collections import defaultdict
     vendas_por_produto = defaultdict(lambda: {"litros": 0, "valor": 0})
-
+    
     for abast in abastecimentos:
         produto = abast["produtoDescricao"]
         vendas_por_produto[produto]["litros"] += abast["quantidade"]
         vendas_por_produto[produto]["valor"] += abast["valorTotal"]
-
+    
     # Mostrar resultados
     for produto, dados in vendas_por_produto.items():
         print(f"{produto}: {dados['litros']:.2f}L - R$ {dados['valor']:.2f}")
@@ -8046,14 +7513,14 @@ def consultar_abastecimento(
         data_inicial="2025-01-01",
         data_final="2025-01-31"
     )
-
+    
     vendas_por_frentista = defaultdict(lambda: {"quantidade": 0, "valor": 0})
-
+    
     for abast in abastecimentos:
         frentista = abast.get("frentistaNome", "Não identificado")
         vendas_por_frentista[frentista]["quantidade"] += 1
         vendas_por_frentista[frentista]["valor"] += abast["valorTotal"]
-
+    
     # Ranking de frentistas
     ranking = sorted(
         vendas_por_frentista.items(),
@@ -8131,7 +7598,7 @@ def excluir_titulo(id: str) -> str:
     titulos = consultar_titulo_pagar(
         titulo_pagar_codigo=12345
     )
-
+    
     if titulos[0]["situacao"] == "PENDENTE":
         excluir_titulo(id="12345")
         print("Título excluído com sucesso")
@@ -8145,7 +7612,7 @@ def excluir_titulo(id: str) -> str:
         data_inicial="2025-01-01",
         data_final="2025-01-10"
     )
-
+    
     # Verificar duplicatas pelo número do documento
     duplicatas = {}
     for t in titulos:
@@ -8195,23 +7662,23 @@ def excluir_titulo(id: str) -> str:
 def excluir_prazo_tabela_preco_item(id: str) -> str:
     """
     **Exclui item de tabela de preços com prazo.**
-
+    
     Remove produto de uma tabela de preços específica, desvinculando
     condições de preço por prazo.
-
+    
     **Quando usar:**
     - Remover produtos de promoções
     - Limpar tabelas de preço obsoletas
     - Ajustar políticas comerciais
-
+    
     **Parâmetros:**
     - `id` (str, obrigatório): ID do item a excluir
-
+    
     **Exemplo:**
     ```python
     excluir_prazo_tabela_preco_item(id='456')
     ```
-
+    
     **Tools Relacionadas:** `incluir_prazo_tabela_preco_item`, `tabela_preco_prazo`
     """
     endpoint = f"/INTEGRACAO/PRAZO_TABELA_PRECO_ITEM/{id}"
@@ -8342,23 +7809,23 @@ def receber_titulo_cartao(id: str, dados: Dict[str, Any]) -> str:
 def incluir_pedido(dados: Dict[str, Any]) -> str:
     """
     **Cria novo pedido de combustível.**
-
+    
     Registra pedido de combustível para clientes, iniciando o ciclo
     de faturamento e entrega.
-
+    
     **Quando usar:**
     - Criar pedidos de combustível
     - Vendas para frotas
     - Gestão de pedidos B2B
-
+    
     **Parâmetros:**
     - `dados` (dict, obrigatório): Dados do pedido (cliente, produtos, quantidades)
-
+    
     **Exemplo:**
     ```python
     incluir_pedido(dados={'cliente_codigo': 10, 'itens': [{'produto': 1, 'qtd': 1000}]})
     ```
-
+    
     **Tools Relacionadas:** `consultar_pedido`, `pedido_faturar`
     """
     params = {}
@@ -8373,31 +7840,29 @@ def incluir_pedido(dados: Dict[str, Any]) -> str:
 def pedido_faturar(id: str, dados: Dict[str, Any]) -> str:
     """
     **Fatura pedido de combustível.**
-
+    
     Converte pedido em venda, gerando nota fiscal e registrando
     movimentação de estoque.
-
+    
     **Quando usar:**
     - Faturar pedidos aprovados
     - Gerar NFe de pedidos
     - Finalizar ciclo de vendas B2B
-
+    
     **Parâmetros:**
     - `id` (str, obrigatório): ID do pedido
     - `dados` (dict, obrigatório): Dados de faturamento
-
+    
     **Exemplo:**
     ```python
     pedido_faturar(id='123', dados={'forma_pagamento': 'prazo'})
     ```
-
+    
     **Tools Relacionadas:** `consultar_pedido`, `pedido_danfe`
     """
     params = {}
 
-    result = client.post(
-        "/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/FATURAR", data=dados, params=params
-    )
+    result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/FATURAR", data=dados, params=params)
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
@@ -8407,30 +7872,28 @@ def pedido_faturar(id: str, dados: Dict[str, Any]) -> str:
 def pedido_danfe(id: str) -> str:
     """
     **Gera DANFE do pedido faturado.**
-
+    
     Retorna DANFE (Documento Auxiliar da NFe) em PDF para impressão
     e entrega ao cliente.
-
+    
     **Quando usar:**
     - Imprimir DANFE de pedidos faturados
     - Enviar comprovante fiscal ao cliente
     - Documentar entregas
-
+    
     **Parâmetros:**
     - `id` (str, obrigatório): ID do pedido faturado
-
+    
     **Exemplo:**
     ```python
     danfe = pedido_danfe(id='123')
     ```
-
+    
     **Tools Relacionadas:** `pedido_faturar`, `pedido_xml`
     """
     params = {}
 
-    result = client.post(
-        f"/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/DANFE", data={}, params=params
-    )
+    result = client.post("/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}/DANFE", data=dados, params=params)
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     return f"Operação realizada com sucesso.\n{format_response(result.get('data', {}))}"
@@ -8523,23 +7986,23 @@ def consultar_produto_combustivel() -> str:
 def consultar_pedido(id: str) -> str:
     """
     **Consulta pedido de combustível específico.**
-
+    
     Retorna detalhes completos de um pedido de combustível, incluindo
     itens, status e informações fiscais.
-
+    
     **Quando usar:**
     - Consultar detalhes de pedido específico
     - Acompanhar status de pedidos
     - Integrações com sistemas externos
-
+    
     **Parâmetros:**
     - `id` (str, obrigatório): ID do pedido
-
+    
     **Exemplo:**
     ```python
     pedido = consultar_pedido(id='123')
     ```
-
+    
     **Tools Relacionadas:** `incluir_pedido`, `pedido_status`
     """
     params = {}
@@ -8554,23 +8017,23 @@ def consultar_pedido(id: str) -> str:
 def excluir_pedido(id: str) -> str:
     """
     **Exclui pedido de combustível.**
-
+    
     Remove pedido não faturado do sistema. Pedidos já faturados
     não podem ser excluídos.
-
+    
     **Quando usar:**
     - Cancelar pedidos não faturados
     - Correção de erros de cadastro
     - Gestão de pedidos pendentes
-
+    
     **Parâmetros:**
     - `id` (str, obrigatório): ID do pedido a excluir
-
+    
     **Exemplo:**
     ```python
     excluir_pedido(id='123')
     ```
-
+    
     **Tools Relacionadas:** `consultar_pedido`, `pedido_status`
     """
     endpoint = f"/INTEGRACAO/PEDIDO_COMBUSTIVEL/PEDIDO/{id}"
@@ -8586,23 +8049,23 @@ def excluir_pedido(id: str) -> str:
 def pedido_xml(id: str) -> str:
     """
     **Retorna XML da NFe do pedido.**
-
+    
     Obtém arquivo XML completo da NFe gerada no faturamento do pedido
     para integrações e validações fiscais.
-
+    
     **Quando usar:**
     - Integrações contábeis
     - Validação fiscal
     - Envio de NFe ao cliente
-
+    
     **Parâmetros:**
     - `id` (str, obrigatório): ID do pedido faturado
-
+    
     **Exemplo:**
     ```python
     xml = pedido_xml(id='123')
     ```
-
+    
     **Tools Relacionadas:** `pedido_danfe`, `pedido_faturar`
     """
     params = {}
@@ -8617,23 +8080,23 @@ def pedido_xml(id: str) -> str:
 def pedido_status(pedidos: Optional[list] = None) -> str:
     """
     **Consulta status de múltiplos pedidos.**
-
+    
     Retorna status atual de uma lista de pedidos (pendente, faturado,
     cancelado, etc.) para acompanhamento em lote.
-
+    
     **Quando usar:**
     - Monitorar múltiplos pedidos
     - Dashboards de gestão
     - Integrações com sistemas externos
-
+    
     **Parâmetros:**
     - `pedidos` (list, opcional): Lista de IDs de pedidos
-
+    
     **Exemplo:**
     ```python
     status = pedido_status(pedidos=['123', '124', '125'])
     ```
-
+    
     **Tools Relacionadas:** `consultar_pedido`, `pedido_faturar`
     """
     params = {}
@@ -8651,39 +8114,7 @@ def pedido_status(pedidos: Optional[list] = None) -> str:
 
 
 @mcp.tool()
-def vendas_periodo(
-    cupom_cancelado: bool,
-    ordenacao_por: str,
-    data_inicial: str,
-    data_final: str,
-    tipo_data: str,
-    agrupamento_por: Optional[str] = None,
-    prazo: Optional[list] = None,
-    turno: Optional[list] = None,
-    hora_acompanha_data: Optional[bool] = None,
-    hora_inicial: Optional[str] = None,
-    hora_final: Optional[str] = None,
-    grupo_produto: Optional[list] = None,
-    ecf: Optional[list] = None,
-    funcionario: Optional[list] = None,
-    produto: Optional[list] = None,
-    cliente: Optional[int] = None,
-    pdv_caixa: Optional[list] = None,
-    tipo_produto: Optional[list] = None,
-    filial: Optional[list] = None,
-    estoque: Optional[list] = None,
-    tipo_venda: Optional[str] = None,
-    apresenta_preco_medio: Optional[bool] = None,
-    grupo_cliente: Optional[list] = None,
-    consolidar: Optional[bool] = None,
-    sub_grupo_produto_nivel1: Optional[list] = None,
-    sub_grupo_produto_nivel2: Optional[list] = None,
-    sub_grupo_produto_nivel3: Optional[list] = None,
-    agrupar_totalizadores: Optional[str] = None,
-    depto_selcon: Optional[str] = None,
-    pdv_gerou_venda: Optional[list] = None,
-    centro_custo: Optional[list] = None,
-) -> str:
+def vendas_periodo(cupom_cancelado: bool, ordenacao_por: str, data_inicial: str, data_final: str, tipo_data: str, agrupamento_por: Optional[str] = None, prazo: Optional[list] = None, turno: Optional[list] = None, hora_acompanha_data: Optional[bool] = None, hora_inicial: Optional[str] = None, hora_final: Optional[str] = None, grupo_produto: Optional[list] = None, ecf: Optional[list] = None, funcionario: Optional[list] = None, produto: Optional[list] = None, cliente: Optional[int] = None, pdv_caixa: Optional[list] = None, tipo_produto: Optional[list] = None, filial: Optional[list] = None, estoque: Optional[list] = None, tipo_venda: Optional[str] = None, apresenta_preco_medio: Optional[bool] = None, grupo_cliente: Optional[list] = None, consolidar: Optional[bool] = None, sub_grupo_produto_nivel1: Optional[list] = None, sub_grupo_produto_nivel2: Optional[list] = None, sub_grupo_produto_nivel3: Optional[list] = None, agrupar_totalizadores: Optional[str] = None, depto_selcon: Optional[str] = None, pdv_gerou_venda: Optional[list] = None, centro_custo: Optional[list] = None) -> str:
     """
     **Gera um relatório detalhado de vendas por período.**
 
@@ -8822,51 +8253,7 @@ def vendas_periodo(
 
 
 @mcp.tool()
-def relatorio_personalizado(
-    relatorio_codigo: str,
-    cliente: Optional[list] = None,
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    caixa: Optional[int] = None,
-    funcionario: Optional[list] = None,
-    grupo_produto: Optional[list] = None,
-    administradora: Optional[list] = None,
-    situacao_receber: Optional[str] = None,
-    filial: Optional[list] = None,
-    produto: Optional[list] = None,
-    distribuidora: Optional[str] = None,
-    modelo_documento_fiscal: Optional[list] = None,
-    plano_conta: Optional[int] = None,
-    intermediador: Optional[list] = None,
-    data_posicao: Optional[str] = None,
-    nota: Optional[str] = None,
-    situacao_trr: Optional[list] = None,
-    sub_grupo_produto: Optional[list] = None,
-    estoque: Optional[list] = None,
-    centro_custo: Optional[list] = None,
-    fidelidade: Optional[int] = None,
-    tipo_premiacao: Optional[str] = None,
-    situacao_caixa: Optional[str] = None,
-    filial_origem: Optional[int] = None,
-    tipo_reajuste: Optional[list] = None,
-    saldo_inicial: Optional[float] = None,
-    placa: Optional[str] = None,
-    cupom: Optional[str] = None,
-    fornecedor: Optional[list] = None,
-    titulo: Optional[str] = None,
-    remessa: Optional[str] = None,
-    conta: Optional[list] = None,
-    grupo_cliente: Optional[list] = None,
-    motorista: Optional[list] = None,
-    veiculo: Optional[list] = None,
-    prazo: Optional[list] = None,
-    centro_custo_cliente: Optional[list] = None,
-    cfop: Optional[list] = None,
-    tipo_filtro: Optional[str] = None,
-    tipo_operacao: Optional[str] = None,
-    valor1_comparador: Optional[float] = None,
-    valor2_comparador: Optional[float] = None,
-) -> str:
+def relatorio_personalizado(relatorio_codigo: str, cliente: Optional[list] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, caixa: Optional[int] = None, funcionario: Optional[list] = None, grupo_produto: Optional[list] = None, administradora: Optional[list] = None, situacao_receber: Optional[str] = None, filial: Optional[list] = None, produto: Optional[list] = None, distribuidora: Optional[str] = None, modelo_documento_fiscal: Optional[list] = None, plano_conta: Optional[int] = None, intermediador: Optional[list] = None, data_posicao: Optional[str] = None, nota: Optional[str] = None, situacao_trr: Optional[list] = None, sub_grupo_produto: Optional[list] = None, estoque: Optional[list] = None, centro_custo: Optional[list] = None, fidelidade: Optional[int] = None, tipo_premiacao: Optional[str] = None, situacao_caixa: Optional[str] = None, filial_origem: Optional[int] = None, tipo_reajuste: Optional[list] = None, saldo_inicial: Optional[float] = None, placa: Optional[str] = None, cupom: Optional[str] = None, fornecedor: Optional[list] = None, titulo: Optional[str] = None, remessa: Optional[str] = None, conta: Optional[list] = None, grupo_cliente: Optional[list] = None, motorista: Optional[list] = None, veiculo: Optional[list] = None, prazo: Optional[list] = None, centro_custo_cliente: Optional[list] = None, cfop: Optional[list] = None, tipo_filtro: Optional[str] = None, tipo_operacao: Optional[str] = None, valor1_comparador: Optional[float] = None, valor2_comparador: Optional[float] = None) -> str:
     """
     **Executa relatório personalizado configurado no sistema.**
 
@@ -9060,41 +8447,14 @@ def relatorio_personalizado(
         params["valor1Comparador"] = valor1_comparador
     if valor2_comparador is not None:
         params["valor2Comparador"] = valor2_comparador
-    result = client.get(
-        "/INTEGRACAO/RELATORIO/RELATORIO_PERSONALIZADO/{relatorioCodigo}", params=params
-    )
+    result = client.get("/INTEGRACAO/RELATORIO/RELATORIO_PERSONALIZADO/{relatorioCodigo}", params=params)
     if not result["success"]:
         return f"Erro: {result.get('error', 'Erro desconhecido')}"
     return format_response(result.get("data", {}))
 
 
 @mcp.tool()
-def produtividade_funcionario(
-    tipo_relatorio: str,
-    tipo_data: Optional[str] = None,
-    funcionario: Optional[int] = None,
-    produto: Optional[int] = None,
-    caixa: Optional[list] = None,
-    data_inicial: Optional[str] = None,
-    data_final: Optional[str] = None,
-    ordenacao: Optional[str] = None,
-    referencia_funcionario: Optional[str] = None,
-    grupo_produto: Optional[list] = None,
-    sub_grupo_produto: Optional[list] = None,
-    pdv: Optional[list] = None,
-    funcoes: Optional[list] = None,
-    tipo_filtro: Optional[str] = None,
-    intervalo_filtro: Optional[str] = None,
-    valor_inicial_filtro: Optional[float] = None,
-    valor_final_filtro: Optional[float] = None,
-    calculo_ticket_medio: Optional[str] = None,
-    agrupamento: Optional[str] = None,
-    filial: Optional[list] = None,
-    comissao: Optional[str] = None,
-    detalha_totalizador_por_grupo: Optional[bool] = None,
-    cliente: Optional[list] = None,
-    grupo_cliente: Optional[list] = None,
-) -> str:
+def produtividade_funcionario(tipo_relatorio: str, tipo_data: Optional[str] = None, funcionario: Optional[int] = None, produto: Optional[int] = None, caixa: Optional[list] = None, data_inicial: Optional[str] = None, data_final: Optional[str] = None, ordenacao: Optional[str] = None, referencia_funcionario: Optional[str] = None, grupo_produto: Optional[list] = None, sub_grupo_produto: Optional[list] = None, pdv: Optional[list] = None, funcoes: Optional[list] = None, tipo_filtro: Optional[str] = None, intervalo_filtro: Optional[str] = None, valor_inicial_filtro: Optional[float] = None, valor_final_filtro: Optional[float] = None, calculo_ticket_medio: Optional[str] = None, agrupamento: Optional[str] = None, filial: Optional[list] = None, comissao: Optional[str] = None, detalha_totalizador_por_grupo: Optional[bool] = None, cliente: Optional[list] = None, grupo_cliente: Optional[list] = None) -> str:
     """
     **Gera relatório de produtividade de funcionários.**
 
@@ -9196,14 +8556,14 @@ def produtividade_funcionario(
         filial=[7],
         ordenacao="VALOR"
     )
-
+    
     # Ordenar por valor decrescente
     ranking = sorted(
         relatorio,
         key=lambda x: x["valorTotal"],
         reverse=True
     )
-
+    
     print("Ranking de Vendedores:")
     for i, func in enumerate(ranking[:10], 1):
         print(f"{i}. {func['nome']}: R$ {func['valorTotal']:,.2f}")
@@ -9216,7 +8576,7 @@ def produtividade_funcionario(
         filial=[7],
         calculo_ticket_medio="VALOR_TOTAL"
     )
-
+    
     for func in relatorio:
         ticket = func["valorTotal"] / func["quantidadeVendas"] if func["quantidadeVendas"] > 0 else 0
         print(f"{func['nome']}: Ticket Médio R$ {ticket:.2f}")
@@ -9300,27 +8660,7 @@ def produtividade_funcionario(
 
 
 @mcp.tool()
-def mapa_desempenho(
-    data_inicial: str,
-    data_final: str,
-    funcionario: Optional[list] = None,
-    grupo_produto: Optional[list] = None,
-    sub_grupo_produto: Optional[list] = None,
-    produto: Optional[int] = None,
-    usa_dado_premiacao: Optional[bool] = None,
-    base_comissao: Optional[str] = None,
-    referencia_funcionario: Optional[str] = None,
-    tipo_relatorio: Optional[str] = None,
-    ordenacao: Optional[str] = None,
-    pdv: Optional[list] = None,
-    premiacao_baseada_historico: Optional[bool] = None,
-    apenas_comissionado: Optional[bool] = None,
-    hora_inicial: Optional[str] = None,
-    hora_final: Optional[str] = None,
-    cliente: Optional[int] = None,
-    apuracao: Optional[str] = None,
-    filial: Optional[list] = None,
-) -> str:
+def mapa_desempenho(data_inicial: str, data_final: str, funcionario: Optional[list] = None, grupo_produto: Optional[list] = None, sub_grupo_produto: Optional[list] = None, produto: Optional[int] = None, usa_dado_premiacao: Optional[bool] = None, base_comissao: Optional[str] = None, referencia_funcionario: Optional[str] = None, tipo_relatorio: Optional[str] = None, ordenacao: Optional[str] = None, pdv: Optional[list] = None, premiacao_baseada_historico: Optional[bool] = None, apenas_comissionado: Optional[bool] = None, hora_inicial: Optional[str] = None, hora_final: Optional[str] = None, cliente: Optional[int] = None, apuracao: Optional[str] = None, filial: Optional[list] = None) -> str:
     """mapaDesempenho - GET /INTEGRACAO/RELATORIO/MAPA_DESEMPENHO"""
     params = {}
     if data_inicial is not None:
@@ -9371,7 +8711,6 @@ def mapa_desempenho(
 # PONTO DE ENTRADA
 # =============================================================================
 
-
 def main():
     """Ponto de entrada principal do servidor MCP."""
     # Aviso se API_KEY não estiver configurada (não bloqueia para permitir inspeção)
@@ -9388,9 +8727,8 @@ def main():
         logger.info(f"URL Base: {WEBPOSTO_BASE_URL}")
         logger.info(f"Chave API: {'*' * 8}...{API_KEY[-8:] if len(API_KEY) > 8 else '****'}")
         logger.info("=" * 60)
-
+    
     mcp.run()
-
 
 if __name__ == "__main__":
     main()
