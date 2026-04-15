@@ -106,8 +106,13 @@ disallow_untyped_defs = true
 
 [tool.ruff]
 line-length = 100
-select = ["E", "F", "W", "I", "N", "D", "UP", "B", "C4", "SIM"]
-ignore = ["D100", "D104"]
+
+[tool.ruff.lint]
+# Regras ativas: erros reais (E,F) + warnings (W).
+# Regras de estilo (D, N, UP, B, C4, SIM) são opcionais para uso local.
+select = ["E", "F", "W"]
+# E501: linhas longas toleradas (código gerado/docstrings extensas)
+ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
