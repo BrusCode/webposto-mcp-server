@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 
 from typing import Optional
+
 from mcp.server.fastmcp import tool
+
 from src.api.webposto_client import api_client
+
 
 @tool()
 def consultar_estoque_produtos(
-    empresa_codigo: Optional[str] = None,
-    limite: Optional[int] = 100
+    empresa_codigo: Optional[str] = None, limite: Optional[int] = 100
 ) -> str:
     """
     Consulta o estoque atual de produtos.
@@ -19,9 +21,7 @@ def consultar_estoque_produtos(
     Returns:
         Um relatório formatado sobre o estoque dos produtos ou uma mensagem de erro.
     """
-    params = {
-        "limite": min(limite, 2000)
-    }
+    params = {"limite": min(limite, 2000)}
     if empresa_codigo:
         params["empresaCodigo"] = empresa_codigo
 
@@ -41,5 +41,5 @@ def consultar_estoque_produtos(
         output.append(
             f'- Produto: {produto.get("produto", {}).get("nome")} | Estoque: {produto.get("estoqueAtual", 0):.2f} {produto.get("produto", {}).get("unidade")}'
         )
-    
+
     return "\n".join(output)

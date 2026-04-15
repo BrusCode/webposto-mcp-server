@@ -10,8 +10,6 @@ import importlib
 import os
 import sys
 
-import pytest
-
 # Garantir que o PYTHONPATH aponta para a raiz do projeto
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -23,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def test_import_webposto_client():
     """WebPostoClient deve importar sem erros."""
-    from src.api.webposto_client import WebPostoClient, default_client, api_client
+    from src.api.webposto_client import WebPostoClient, api_client, default_client
 
     assert WebPostoClient is not None
     assert default_client is not None
@@ -32,7 +30,7 @@ def test_import_webposto_client():
 
 def test_api_client_alias():
     """api_client deve ser o mesmo objeto que default_client."""
-    from src.api.webposto_client import default_client, api_client
+    from src.api.webposto_client import api_client, default_client
 
     assert api_client is default_client
 
@@ -108,6 +106,7 @@ def test_env_url_default(monkeypatch):
 
     # Reimportar o módulo para pegar o novo estado do ambiente
     import importlib
+
     import src.api.webposto_client as wc_mod
 
     importlib.reload(wc_mod)
@@ -119,6 +118,7 @@ def test_env_url_override(monkeypatch):
     monkeypatch.setenv("WEBPOSTO_URL", "https://meu-servidor.com")
 
     import importlib
+
     import src.api.webposto_client as wc_mod
 
     importlib.reload(wc_mod)
