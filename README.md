@@ -2,7 +2,7 @@
 
 ![Quality Automação](https://www.webposto.com.br/assets/logos/webposto/logo-wp.webp)
 
-**Versão:** 1.2.0
+**Versão:** 1.3.0
 
 **Licença:** MIT
 
@@ -46,28 +46,51 @@ Este projeto foi desenvolvido seguindo as melhores práticas de engenharia de so
 
 ## Arquitetura
 
-O servidor é construído em Python 3.11 com base no SDK do **MCP**:
+O servidor é construído em Python 3.10+ com base no SDK do **MCP** / **FastMCP**:
 
 ```
 webposto-mcp-server/
-├── aws/                          # Infraestrutura AWS (SAM)
-│   └── template.yaml
-├── scripts/                      # Scripts de inicialização
-│   ├── start_server.ps1          # Windows PowerShell
-│   └── start_server.sh           # Linux/WSL/macOS
-├── src/                          # Código fonte
-│   ├── api/                      # Cliente HTTP
-│   │   └── webposto_client.py
-│   ├── tools/                    # Ferramentas MCP modulares
-│   ├── config.py                 # Configuração via env vars
-│   ├── lambda_handler.py         # Handler AWS Lambda
-│   └── server.py                 # Servidor MCP principal
-├── tests/                        # Testes automatizados
-├── .env.example                  # Template de configuração
-├── Dockerfile                    # Containerização
-├── docker-compose.yml            # Orquestração de containers
-└── README.md
+├── aws/                              # Infraestrutura AWS (SAM)
+│   ├── template.yaml                 # Template básico (API Gateway v1)
+│   └── template.v2.yaml              # Template produção (HTTP API v2 + Secrets Manager)
+├── docs/                             # Documentação adicional
+│   ├── DEPLOY_AWS.md                 # Guia de deploy serverless na AWS
+│   ├── DEPLOY_PORTAINER.md           # Guia de deploy com Portainer/Swarm
+│   ├── GUIA_USO_APIS.md              # Guia de uso das APIs WebPosto
+│   ├── LAMBDA_HANDLER_IMPLEMENTATION.md
+│   ├── mapeamento_dependencias_apis.md
+│   └── prompt_agente_webposto.md     # Prompt otimizado para agentes IA
+├── scripts/                          # Scripts de inicialização
+│   ├── start_server.ps1              # Windows PowerShell
+│   └── start_server.sh              # Linux/WSL/macOS
+├── src/                              # Código fonte
+│   ├── api/                          # Cliente HTTP canônico
+│   │   └── webposto_client.py        # WebPostoClient (autenticação, normalização, retry)
+│   ├── tools/                        # Ferramentas MCP modulares (em migração)
+│   │   ├── abastecimento_tools.py
+│   │   ├── caixa_tools.py
+│   │   └── estoque_tools.py
+│   ├── lambda_handler.py             # Handler AWS Lambda (básico)
+│   ├── lambda_handler.v2.py          # Handler AWS Lambda produção (Secrets Manager)
+│   ├── main.py                       # Entry point alternativo (modo HTTP/SSE)
+│   ├── resources_prompts.py          # Resources e Prompts MCP
+│   ├── server.py                     # Servidor MCP principal (144 tools, stdio)
+│   └── server_http.py                # Servidor MCP modo HTTP/SSE (acesso remoto)
+├── tests/                            # Testes automatizados
+│   └── test_smoke.py
+├── .env.example                      # Template de configuração
+├── docker-compose.yml                # Docker Compose padrão
+├── docker-stack.yml                  # Docker Stack (Portainer, pull do GitHub)
+├── docker-stack-build.yml            # Docker Stack (build local)
+├── docker-stack-traefik-v2.yml       # Docker Stack com Traefik v2 (HTTPS)
+├── Dockerfile                        # Containerização multi-stage
+├── fastmcp.json                      # Configuração FastMCP Cloud
+└── pyproject.toml                    # Metadados e dependências do projeto
 ```
+
+> **Nota:** A migração para arquitetura totalmente modular (`src/tools/`) está em andamento.
+> Atualmente, todos os 144 tools estão em `src/server.py`. Os arquivos em `src/tools/`
+> são o início dessa migração e serão integrados em versões futuras.
 
 ---
 
@@ -170,20 +193,25 @@ Para verificar os logs: `docker-compose logs -f`
    cd webposto-mcp-server
    ```
 
-3. **Instale as dependências globalmente:**
+3. **Crie e ative um ambiente virtual:**
    ```powershell
-   pip install requests mcp pydantic pydantic-settings python-dotenv httpx
+   python -m venv .venv
+   .venv\Scripts\Activate.ps1
    ```
 
-4. **Configure as variáveis de ambiente:**
+4. **Instale as dependências:**
+   ```powershell
+   pip install -r requirements.txt
+   ```
+
+5. **Configure as variáveis de ambiente:**
    ```powershell
    Copy-Item .env.example .env
    notepad .env  # Edite e insira sua chave
    ```
 
-5. **Teste o servidor (opcional):**
+6. **Inicie o servidor:**
    ```powershell
-   $env:WEBPOSTO_API_KEY="sua-chave-aqui"
    $env:PYTHONPATH="$PWD"
    python -m src.server
    ```
@@ -308,13 +336,19 @@ Após o deploy, o SAM fornecerá o endpoint do API Gateway.
 
 ### Estrutura do Código
 
-- `src/server.py`: Servidor MCP principal com todas as ferramentas
-- `src/api/webposto_client.py`: Cliente HTTP para a API WebPosto
-- `src/config.py`: Configuração via variáveis de ambiente
+- `src/server.py`: Servidor MCP principal com todas as 144 ferramentas (modo stdio)
+- `src/server_http.py`: Servidor MCP em modo HTTP/SSE para acesso remoto
+- `src/api/webposto_client.py`: Cliente HTTP canônico para a API WebPosto
+- `src/tools/`: Módulos de ferramentas (migração modular em andamento)
+- `src/lambda_handler.v2.py`: Handler AWS Lambda com Secrets Manager
 
 ### Executar Testes
 
 ```bash
+# Instalar dependências de desenvolvimento
+pip install -e ".[dev]"
+
+# Rodar os testes (smoke tests + futuras suites)
 pytest tests/ -v
 ```
 

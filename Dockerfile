@@ -39,7 +39,7 @@ ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
 # Variáveis de ambiente padrão (devem ser sobrescritas em runtime)
-ENV WEBPOSTO_URL=https://web.qualityautomacao.com.br/INTEGRACAO
+ENV WEBPOSTO_URL=https://web.qualityautomacao.com.br
 ENV WEBPOSTO_API_KEY=""
 
 # Trocar para usuário não-root

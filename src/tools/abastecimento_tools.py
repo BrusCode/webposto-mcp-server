@@ -41,7 +41,7 @@ def consultar_abastecimentos(
     result = api_client.get("/ABASTECIMENTO", params=params)
 
     if not result["success"]:
-        return f"Erro ao consultar abastecimentos: {result["error"]}"
+        return f"Erro ao consultar abastecimentos: {result['error']}"
 
     data = result.get("data", {})
     registros = data.get("resultados", []) if isinstance(data, dict) else data
@@ -52,7 +52,7 @@ def consultar_abastecimentos(
     output = [f"Relatório de Abastecimentos ({data_inicial} a {data_final})\n"]
     for abs in registros:
         output.append(
-            f"- Abastecimento ID: {abs.get("abastecimentoCodigo")} | Bico: {abs.get("bico")} | Litros: {abs.get("litros", 0):.3f} | Total: R$ {abs.get("total", 0):.2f}"
+            f"- Abastecimento ID: {abs.get('abastecimentoCodigo')} | Bico: {abs.get('bico')} | Litros: {abs.get('litros', 0):.3f} | Total: R$ {abs.get('total', 0):.2f}"
         )
     
     return "\n".join(output)

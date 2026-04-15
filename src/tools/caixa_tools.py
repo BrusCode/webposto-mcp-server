@@ -41,7 +41,7 @@ def consultar_caixas(
     result = api_client.get("/CAIXA", params=params)
 
     if not result["success"]:
-        return f"Erro ao consultar caixas: {result["error"]}"
+        return f"Erro ao consultar caixas: {result['error']}"
 
     data = result.get("data", {})
     registros = data.get("resultados", []) if isinstance(data, dict) else data
@@ -54,7 +54,7 @@ def consultar_caixas(
     for caixa in registros:
         status = "Fechado" if caixa.get("fechamento") else "Aberto"
         output.append(
-            f"- Caixa ID: {caixa.get("caixaCodigo")} | Status: {status} | Operador: {caixa.get("operador", {}).get("nome")} | Total: R$ {caixa.get("apurado", 0):.2f}"
+            f"- Caixa ID: {caixa.get('caixaCodigo')} | Status: {status} | Operador: {caixa.get('operador', {}).get('nome')} | Total: R$ {caixa.get('apurado', 0):.2f}"
         )
     
     return "\n".join(output)

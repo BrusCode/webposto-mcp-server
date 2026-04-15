@@ -28,8 +28,14 @@ from src.server import mcp, API_KEY, WEBPOSTO_BASE_URL, logger
 mcp.settings.host = os.getenv("MCP_HOST", "0.0.0.0")
 mcp.settings.port = int(os.getenv("MCP_PORT", "8000"))
 
-# Configurar segurança de transporte para permitir acesso externo
-# Por padrão, o FastMCP só permite localhost
+# Configurar segurança de transporte para permitir acesso externo.
+# Por padrão, o FastMCP só permite localhost. As configurações abaixo são
+# necessárias para uso em containers e redes remotas.
+#
+# ATENÇÃO SEGURANÇA: Em produção, coloque SEMPRE um reverse-proxy com TLS
+# na frente (ex: Traefik, nginx). Nunca exponha esta porta diretamente à
+# internet sem camada de autenticação e criptografia.
+# Ver: docs/DEPLOY_PORTAINER.md → configuração Traefik
 mcp.settings.transport_security.enable_dns_rebinding_protection = False
 mcp.settings.transport_security.allowed_hosts = ["*"]
 mcp.settings.transport_security.allowed_origins = ["*"]
