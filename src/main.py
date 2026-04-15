@@ -1,38 +1,28 @@
 #!/usr/bin/env python3
+"""
+WebPosto MCP Server — Ponto de Entrada Alternativo (HTTP/SSE)
+Quality Automação
 
-import logging
-import sys
-from fastapi import FastAPI
-from mcp.server.fastmcp import FastMCP
+Este módulo é um atalho para iniciar o servidor no modo HTTP/SSE.
+Para o modo padrão (stdio, compatível com Claude Desktop), use:
 
-# Configuração de logging
-logging.basicConfig(level=logging.INFO, stream=sys.stderr)
-logger = logging.getLogger(__name__)
+    python -m src.server
 
-# Criação do servidor MCP
-mcp = FastMCP(
-    server_name="webposto-mcp",
-    server_title="WebPosto MCP Server",
-    server_description="Servidor MCP para integração com o sistema de gestão de postos WebPosto.",
-    tools_package="src.tools" # Pacote onde as ferramentas serão descobertas
-)
+Para o modo HTTP/SSE (acesso remoto via rede), use:
 
-# Criação da aplicação FastAPI
-app = FastAPI(
-    title="WebPosto MCP Server",
-    description="Servidor MCP para integração com a API da Quality Automação (WebPosto).",
-    version="1.0.0"
-)
+    python -m src.server_http
 
-# Incluir as rotas do MCP no FastAPI
-app.include_router(mcp.router)
+ou execute este módulo diretamente:
 
-@app.get("/health", tags=["Status"])
-async def health_check():
-    """Verifica a saúde do servidor."""
-    return {"status": "ok"}
+    python -m src.main
 
-# Ponto de entrada para uvicorn (para desenvolvimento)
+Ver também:
+    - src/server.py      : servidor MCP principal (stdio)
+    - src/server_http.py : modo HTTP/SSE
+    - docs/DEPLOY_PORTAINER.md : deploy em containers
+"""
+
+from src.server_http import main
+
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    main()

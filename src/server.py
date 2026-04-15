@@ -7,7 +7,7 @@ Este servidor fornece ferramentas para assistentes de IA interagirem com a API
 do WebPosto, permitindo consultas e operações no sistema de gestão de postos.
 
 Autor: Quality Automação
-Versão: 1.2.0
+Versão: 1.3.0
 
 IMPORTANTE: A autenticação é feita via parâmetro "chave" na query string,
 conforme documentação oficial da API WebPosto.
@@ -18,7 +18,6 @@ import sys
 import json
 import logging
 import os
-import requests
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -60,124 +59,14 @@ WEBPOSTO_BASE_URL = os.getenv('WEBPOSTO_URL', 'https://web.qualityautomacao.com.
 API_KEY = os.getenv('WEBPOSTO_API_KEY', '')
 DEFAULT_EMPRESA_CODIGO = os.getenv('WEBPOSTO_EMPRESA_CODIGO', '')
 
-def get_headers():
-    """Retorna os headers para requisições à API."""
-    return {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-    }
-
 # =============================================================================
-# CLIENTE HTTP
+# CLIENTE HTTP — importado de src/api/webposto_client.py (fonte canônica)
 # =============================================================================
 
-class WebPostoClient:
-    """Cliente HTTP para comunicação com a API WebPosto."""
-    
-    def __init__(self, base_url: str = WEBPOSTO_BASE_URL):
-        self.base_url = base_url.rstrip('/')
-        self.timeout = 180  # Aumentado para suportar requisições pesadas (ex: consultar_abastecimento)
-    
-    def _normalize_params(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Normaliza parâmetros para compatibilidade com a API WebPosto.
-        
-        Converte booleanos Python (True/False) para strings minúsculas (true/false)
-        que a API WebPosto espera.
-        """
-        if params is None:
-            return {}
-        
-        normalized = {}
-        for key, value in params.items():
-            if isinstance(value, bool):
-                # Converter booleano Python para string minúscula
-                normalized[key] = str(value).lower()
-            elif isinstance(value, list):
-                # Processar listas recursivamente
-                normalized[key] = [str(v).lower() if isinstance(v, bool) else v for v in value]
-            else:
-                normalized[key] = value
-        return normalized
-    
-    def _add_auth_param(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Adiciona o parâmetro de autenticação 'chave' aos parâmetros da requisição.
-        
-        A chave é lida dinamicamente do ambiente para garantir que
-        variáveis definidas após a importação do módulo sejam capturadas.
-        """
-        if params is None:
-            params = {}
-        # Ler a chave dinamicamente do ambiente
-        api_key = os.getenv('WEBPOSTO_API_KEY', '') or API_KEY
-        if api_key:
-            params['chave'] = api_key
-        else:
-            logger.warning("AVISO: Requisição sem chave de API - WEBPOSTO_API_KEY não configurada")
-        return params
-    
-    def _make_request(
-        self,
-        method: str,
-        endpoint: str,
-        params: Optional[Dict[str, Any]] = None,
-        data: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """Executa uma requisição HTTP para a API."""
-        url = f"{self.base_url}{endpoint}"
-        # Normalizar parâmetros (converter booleanos para strings minúsculas)
-        params = self._normalize_params(params)
-        # Adicionar autenticação
-        params = self._add_auth_param(params)
-        
-        try:
-            # Log da URL com parâmetros (sem expor a chave completa)
-            params_log = {k: (v[:8] + '...' if k == 'chave' and v else v) for k, v in params.items()}
-            logger.info(f"Requisição {method} para: {url}")
-            logger.debug(f"Parâmetros: {params_log}")
-            
-            response = requests.request(
-                method=method,
-                url=url,
-                headers=get_headers(),
-                params=params,
-                json=data,
-                timeout=self.timeout
-            )
-            
-            logger.info(f"Status: {response.status_code}")
-            
-            if response.status_code == 204:
-                return {"success": True, "data": None, "message": "Operação realizada com sucesso"}
-            
-            if 200 <= response.status_code < 300:
-                try:
-                    return {"success": True, "data": response.json()}
-                except json.JSONDecodeError:
-                    return {"success": True, "data": response.text}
-            else:
-                error_msg = response.text[:500] if response.text else f"Erro HTTP {response.status_code}"
-                return {"success": False, "error": f"Erro {response.status_code}: {error_msg}", "status_code": response.status_code}
-                
-        except requests.exceptions.Timeout:
-            return {"success": False, "error": "Timeout na requisição (30s)"}
-        except requests.exceptions.ConnectionError as e:
-            return {"success": False, "error": f"Erro de conexão: {e}"}
-        except requests.exceptions.RequestException as e:
-            return {"success": False, "error": str(e)}
-    
-    def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        return self._make_request("GET", endpoint, params=params)
-    
-    def post(self, endpoint: str, data: Dict[str, Any], params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        return self._make_request("POST", endpoint, params=params, data=data)
-    
-    def put(self, endpoint: str, data: Dict[str, Any], params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        return self._make_request("PUT", endpoint, params=params, data=data)
-    
-    def delete(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        return self._make_request("DELETE", endpoint, params=params)
-
-client = WebPostoClient()
+try:
+    from src.api.webposto_client import WebPostoClient, default_client as client
+except ImportError:
+    from api.webposto_client import WebPostoClient, default_client as client
 
 # =============================================================================
 # SERVIDOR MCP
@@ -3752,110 +3641,43 @@ def sangria_caixa(data_inicial: Optional[str] = None, data_final: Optional[str] 
 
 
 @mcp.tool()
-def relatorio_pernonalizado(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
+def listar_relatorios_personalizados(ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
     """
-    **Consulta relatórios personalizados configurados no sistema.**
-    
-    Esta tool permite acessar relatórios customizados criados pelos usuários no webPosto,
-    oferecendo flexibilidade para análises específicas de cada negócio. Relatórios
-    personalizados podem combinar dados de múltiplas tabelas e aplicar regras de negócio
-    específicas.
-    
+    **Lista os relatórios personalizados configurados no sistema.**
+
+    Esta tool retorna o catálogo de relatórios customizados criados pelos usuários
+    no webPosto. Use-a para descobrir quais relatórios estão disponíveis antes de
+    executá-los com `relatorio_personalizado`.
+
     **Quando usar:**
-    - Para acessar relatórios customizados criados no sistema
-    - Para análises específicas não cobertas por relatórios padrão
-    - Para dashboards gerenciais personalizados
-    - Para extrair dados com regras de negócio específicas
-    - Para integrações que necessitam de dados em formatos customizados
-    
-    **Arquitetura de Relatórios Personalizados:**
-    No webPosto, relatórios personalizados são criados através de uma interface de
-    configuração que permite ao usuário definir:
-    - Fontes de dados (tabelas e joins)
-    - Filtros e condições
-    - Agrupamentos e totalizações
-    - Formato de saída
-    
-    **Fluxo de Uso Essencial:**
-    1. **Liste os Relatórios:** Chame `relatorio_pernonalizado` sem filtros para ver
-       todos os relatórios disponíveis.
-    2. **Identifique o Relatório:** Analise a lista e identifique o código do relatório
-       desejado.
-    3. **Execute o Relatório:** Chame novamente passando o código específico para obter
-       os dados do relatório.
-    
+    - Para listar todos os relatórios disponíveis
+    - Para obter o código de um relatório antes de executá-lo
+    - Para dashboards e integrações que precisam conhecer os relatórios existentes
+
+    **Diferença entre as tools de relatório:**
+    - `listar_relatorios_personalizados`: Lista/descobre relatórios existentes (GET)
+    - `relatorio_personalizado`: Executa um relatório específico com filtros (POST)
+
+    **Fluxo de Uso:**
+    1. **Liste os Relatórios:** Chame `listar_relatorios_personalizados` para ver o catálogo.
+    2. **Identifique o Código:** Anote o código do relatório desejado.
+    3. **Execute:** Chame `relatorio_personalizado` com o código e os filtros.
+
     **Parâmetros:**
-    - `ultimo_codigo` (int, opcional): Código do último relatório retornado, para paginação.
-      Exemplo: 150
-    - `limite` (int, opcional): Número máximo de registros a retornar (default: 100, max: 2000).
-      Exemplo: 50
-    
-    **Retorno:**
-    Lista de relatórios personalizados contendo:
-    - Código do relatório
-    - Nome/Descrição
-    - Tipo de relatório
-    - Parâmetros configurados
-    - Dados do relatório (se código específico for fornecido)
-    - Data de criação/atualização
-    - Usuário criador
-    
-    **Exemplo de Uso (Python):**
+    - `ultimo_codigo` (int, opcional): Para paginação — código do último relatório retornado.
+    - `limite` (int, opcional): Número máximo de registros (default: 100, max: 2000).
+
+    **Exemplo:**
     ```python
-    # Cenário 1: Listar todos os relatórios personalizados disponíveis
-    relatorios = relatorio_pernonalizado(limite=100)
-    print("Relatórios disponíveis:", relatorios)
-    
-    # Cenário 2: Acessar relatório específico
-    # Supondo que o código do relatório "Vendas por Região" seja 42
-    dados_relatorio = relatorio_pernonalizado(ultimo_codigo=42, limite=1)
-    print("Dados do relatório:", dados_relatorio)
-    
-    # Cenário 3: Paginação de relatórios (listar próximos 50)
-    proximos = relatorio_pernonalizado(ultimo_codigo=100, limite=50)
-    
-    # Cenário 4: Integração com dashboard
-    # Buscar múltiplos relatórios para compor um dashboard
-    dashboard_data = {}
-    relatorios_ids = [10, 25, 42, 58]  # IDs dos relatórios do dashboard
-    
-    for rel_id in relatorios_ids:
-        dados = relatorio_pernonalizado(ultimo_codigo=rel_id, limite=1)
-        dashboard_data[f"relatorio_{rel_id}"] = dados
-    
-    print("Dashboard completo:", dashboard_data)
+    # Listar todos os relatórios disponíveis
+    relatorios = listar_relatorios_personalizados(limite=100)
+    print(relatorios)
     ```
-    
-    **Dicas de Análise:**
-    - **Identifique Padrões:** Relatórios personalizados frequentemente revelam padrões
-      de negócio específicos da operação.
-    - **Combine com Outras Tools:** Use em conjunto com `vendas_periodo` e `consultar_dre`
-      para análises completas.
-    - **Automatize Dashboards:** Crie rotinas que executam múltiplos relatórios
-      personalizados para dashboards gerenciais.
-    - **Valide Dados:** Sempre valide os dados retornados, pois relatórios personalizados
-      podem ter regras de negócio complexas.
-    
-    **Casos de Uso Estratégicos:**
-    - **Dashboard Executivo:** Combinar múltiplos relatórios personalizados para visão
-      consolidada do negócio.
-    - **Análise de Margens:** Relatórios customizados para análise de margens por
-      produto, categoria ou região.
-    - **Compliance:** Relatórios específicos para auditorias e conformidade regulatória.
-    - **Análise de Tendências:** Relatórios históricos para identificação de tendências
-      de vendas e consumo.
-    
+
     **Tools Relacionadas:**
-    - `vendas_periodo` - Relatório padrão de vendas
+    - `relatorio_personalizado` - Executa relatório com filtros
     - `consultar_dre` - Demonstrativo de Resultados
-    - `consultar_relatorio_mapa` - Relatório de mapa de vendas
     - `consultar_view` - Consultas a views customizadas
-    
-    **Observações Importantes:**
-    - Relatórios personalizados são específicos de cada instalação do webPosto.
-    - A estrutura de retorno pode variar conforme a configuração do relatório.
-    - Alguns relatórios podem exigir parâmetros adicionais não documentados aqui.
-    - Performance pode variar conforme complexidade do relatório.
     """
     params = {}
     if ultimo_codigo is not None:
@@ -5073,7 +4895,7 @@ def consultar_relatorio_mapa(data_inicial: str, data_final: str, empresa_codigo:
     **Tools Relacionadas:**
     - `vendas_periodo` - Detalhamento de vendas
     - `consultar_dre` - Análise financeira completa
-    - `relatorio_pernonalizado` - Relatórios customizados
+    - `listar_relatorios_personalizados` - Listar relatórios customizados
     """
     params = {}
     if empresa_codigo is not None:
@@ -6198,7 +6020,7 @@ def consultar_dre(data_inicial: str, data_final: str, apuracao_caixa: Optional[b
     **Tools Relacionadas:**
     - `vendas_periodo` - Detalhamento das receitas
     - `consultar_despesa_financeiro_rede` - Análise de despesas
-    - `relatorio_pernonalizado` - Relatórios customizados
+    - `listar_relatorios_personalizados` - Listar relatórios customizados
     - `consultar_relatorio_mapa` - Mapa de vendas e custos
     
     **Observações Importantes:**
@@ -6538,7 +6360,7 @@ def consultar_view(dias: Optional[int] = None, volume_minimo: Optional[int] = No
     - **Relatórios Regulatórios:** Views pré-configuradas para compliance.
     
     **Tools Relacionadas:**
-    - `relatorio_pernonalizado` - Relatórios customizados
+    - `listar_relatorios_personalizados` - Listar relatórios customizados
     - `consultar_dre` - Análise financeira
     - `consultar_relatorio_mapa` - Mapa de desempenho
     
@@ -6590,7 +6412,16 @@ def consultar_sub_grupo_rede() -> str:
 
 @mcp.tool()
 def consultar_sub_grupo_rede_1() -> str:
-    """consultarSubGrupoRede_1 - GET /INTEGRACAO/SUB_GRUPO_REDE"""
+    """
+    **Consulta subgrupos de produtos da rede (variante sem parâmetros).**
+
+    Equivalente a `consultar_sub_grupo_rede`, retornando todos os subgrupos
+    sem filtros. Use quando precisar de uma listagem completa e simples.
+
+    **Tools Relacionadas:**
+    - `consultar_sub_grupo_rede` - Versão principal com mesmo endpoint
+    - `consultar_grupo` - Grupos de produtos
+    """
     params = {}
 
     result = client.get("/INTEGRACAO/SUB_GRUPO_REDE", params=params)
@@ -7158,7 +6989,31 @@ def consultar_centro_custo(centro_custo_codigo_externo: Optional[str] = None, ul
 
 @mcp.tool()
 def consultar_pisconfins_1(data_inicial: str, data_final: str, empresa_codigo: Optional[list] = None, venda_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None, quitado: Optional[bool] = None, data_hora_atualizacao: Optional[str] = None, origem: Optional[str] = None) -> str:
-    """consultarPisconfins_1 - GET /INTEGRACAO/CARTAO_REMESSA"""
+    """
+    **Consulta remessas de cartão (CARTAO_REMESSA).**
+
+    ATENÇÃO: Apesar do nome conter "pisconfins", esta tool consulta remessas
+    de cartão (`/INTEGRACAO/CARTAO_REMESSA`), não PIS/COFINS.
+    Para PIS/COFINS real, use `consultar_pisconfins`.
+
+    **Quando usar:**
+    - Para consultar remessas de cartão de crédito/débito
+    - Para conciliação de transações com operadoras de cartão
+    - Para relatórios de recebíveis de cartão por período
+
+    **Parâmetros:**
+    - `data_inicial`, `data_final` (str, obrigatórios): Período (YYYY-MM-DD)
+    - `empresa_codigo` (list, opcional): Filtrar por empresa(s)
+    - `venda_codigo` (int, opcional): Filtrar por venda específica
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+    - `quitado` (bool, opcional): Filtrar por status de quitação
+    - `data_hora_atualizacao` (str, opcional): Filtrar por data de atualização
+    - `origem` (str, opcional): Origem da transação
+
+    **Tools Relacionadas:**
+    - `consultar_pisconfins` - Consulta PIS/COFINS real
+    - `consultar_cartao_pagar` - Cartões a pagar
+    """
     params = {}
     if empresa_codigo is not None:
         params["empresaCodigo"] = empresa_codigo
@@ -7214,7 +7069,27 @@ def consultar_cartao_pagar(data_inicial: str, data_final: str, tipo_data: str, e
 
 @mcp.tool()
 def consultar_cheque_pagar_1(cartao_compra_codigo: Optional[int] = None, empresa_codigo: Optional[int] = None, ultimo_codigo: Optional[int] = None, limite: Optional[int] = None) -> str:
-    """consultarChequePagar_1 - GET /INTEGRACAO/CARTAO_COMPRA"""
+    """
+    **Consulta compras no cartão corporativo (CARTAO_COMPRA).**
+
+    ATENÇÃO: Apesar do nome conter "cheque_pagar", esta tool consulta compras
+    realizadas com cartão corporativo (`/INTEGRACAO/CARTAO_COMPRA`), não cheques.
+    Para cheques a pagar, use `consultar_cheque_pagar`.
+
+    **Quando usar:**
+    - Para consultar compras feitas com cartão corporativo/frota
+    - Para conciliação de despesas no cartão
+    - Para relatórios de gastos corporativos
+
+    **Parâmetros:**
+    - `cartao_compra_codigo` (int, opcional): Código de uma compra específica
+    - `empresa_codigo` (int, opcional): Filtrar por empresa
+    - `ultimo_codigo`, `limite` (int, opcional): Paginação
+
+    **Tools Relacionadas:**
+    - `consultar_cheque_pagar` - Cheques a pagar (endpoint correto para cheques)
+    - `consultar_cartao_pagar` - Cartões a pagar (recebíveis)
+    """
     params = {}
     if cartao_compra_codigo is not None:
         params["cartaoCompraCodigo"] = cartao_compra_codigo

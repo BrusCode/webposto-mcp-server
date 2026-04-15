@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "master", "develop", "claude/**"]
+  pull_request:
+    branches: ["main", "master"]
+
+jobs:
+  lint:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dev dependencies
+        run: pip install ruff black isort
+
+      - name: ruff (linting)
+        run: ruff check src/ tests/
+
+      - name: black (format check)
+        run: black --check src/ tests/
+
+      - name: isort (import order check)
+        run: isort --check-only src/ tests/
+
+  test:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install dev dependencies
+        run: pip install pytest pytest-asyncio pytest-cov
+
+      - name: Run smoke tests
+        env:
+          WEBPOSTO_API_KEY: "dummy-key-for-tests"
+          PYTHONPATH: ${{ github.workspace }}
+        run: pytest tests/ -v --tb=short
+
+  syntax-check:
+    name: Python Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check syntax of all Python files
+        run: |
+          find src/ tests/ -name "*.py" -exec python -m py_compile {} \; && echo "All files OK"

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "webposto-mcp-server"
-version = "1.0.0"
+version = "1.3.0"
 description = "Servidor MCP (Model Context Protocol) para integração com o sistema WebPosto - Quality Automação"
 readme = "README.md"
 license = {text = "MIT"}

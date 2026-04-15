@@ -13,7 +13,7 @@ Exemplo de uso:
 import json
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -55,23 +55,56 @@ class WebPostoClient:
             'Accept': 'application/json',
             'Content-Type': 'application/json'
         }
-    
+
+    def _normalize_params(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Normaliza parâmetros para compatibilidade com a API WebPosto.
+
+        Converte booleanos Python (True/False) para strings minúsculas (true/false)
+        que a API WebPosto espera na query string.
+
+        Args:
+            params: Dicionário de parâmetros a normalizar
+
+        Returns:
+            Dicionário com booleanos convertidos para string
+        """
+        if params is None:
+            return {}
+
+        normalized: Dict[str, Any] = {}
+        for key, value in params.items():
+            if isinstance(value, bool):
+                normalized[key] = str(value).lower()
+            elif isinstance(value, list):
+                normalized[key] = [str(v).lower() if isinstance(v, bool) else v for v in value]
+            else:
+                normalized[key] = value
+        return normalized
+
     def _add_auth_param(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Adiciona o parâmetro de autenticação 'chave' aos parâmetros da requisição.
-        
+
+        A chave é lida dinamicamente do ambiente a cada chamada para suportar
+        injeção em tempo de execução (ex: AWS Lambda via Secrets Manager).
+
         Args:
             params: Dicionário de parâmetros existentes
-            
+
         Returns:
             Dicionário de parâmetros com a chave de autenticação adicionada
         """
         if params is None:
             params = {}
-        
-        if self.api_key:
-            params['chave'] = self.api_key
-        
+
+        # Leitura dinâmica: env var tem prioridade; self.api_key é fallback
+        api_key = os.getenv('WEBPOSTO_API_KEY', '') or self.api_key
+        if api_key:
+            params['chave'] = api_key
+        else:
+            logger.warning("WEBPOSTO_API_KEY não configurada — requisição enviada sem autenticação")
+
         return params
     
     def _make_request(
@@ -98,11 +131,13 @@ class WebPostoClient:
             - status_code: código HTTP da resposta
         """
         url = f"{self.base_url}{endpoint}"
+        params = self._normalize_params(params)
         params = self._add_auth_param(params)
         
         try:
+            params_log = {k: (v[:8] + '...' if k == 'chave' and v else v) for k, v in params.items()}
             logger.info(f"Requisição {method} para: {url}")
-            logger.debug(f"Parâmetros: {params}")
+            logger.debug(f"Parâmetros: {params_log}")
             
             response = requests.request(
                 method=method,
@@ -261,3 +296,6 @@ class WebPostoClient:
 
 # Instância global do cliente para uso conveniente
 default_client = WebPostoClient()
+
+# Alias para compatibilidade com os módulos de tools
+api_client = default_client
